@@ -487,7 +487,7 @@ _Tqdm tqdm(T (&tab)[N], Params p = Params()) {
   return _Tqdm(tab, N, p);
 }
 
-template <typename SizeType = int>
+template <typename SizeType>
 using RangeTqdm = Tqdm<RangeIterator<SizeType>>;
 template <typename SizeType>
 RangeTqdm<SizeType> range(SizeType n, Params p = Params()) {
