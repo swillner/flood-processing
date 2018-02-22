@@ -35,16 +35,24 @@ class exception : public std::runtime_error {
 };
 
 class hstring {
-  protected:
-    const std::string str_m;
-    const uint32_t hash_m;
-
   public:
     using base_type = std::string;
-    static constexpr uint32_t hash(const char* str, unsigned int prev = 5381) { return *str ? hash(str + 1, prev * 33 + *str) : prev; }
-    explicit hstring(const std::string& str_p) : str_m(str_p), hash_m(hash(str_p.c_str())){};
-    operator const uint32_t&() const { return hash_m; }
-    operator const std::string&() const { return str_m; }
+    using hash_type = uint64_t;
+  protected:
+    const base_type str_m;
+    const hash_type hash_m;
+    hstring(const base_type& str_p, hash_type hash_p) : str_m(str_p), hash_m(hash_p){};
+
+  public:
+    static constexpr hash_type hash(const char* str, hash_type prev = 5381) { return *str ? hash(str + 1, prev * 33 + *str) : prev; }
+    static hstring null() { return hstring("", 0); }
+    explicit hstring(const base_type& str_p) : str_m(str_p), hash_m(hash(str_p.c_str())){};
+    operator hash_type() const { return hash_m; }
+    operator const base_type&() const { return str_m; }
+    hash_type operator^(hash_type other) const { return hash_m * 5381 * 5381 + other; }
+    friend std::ostream& operator<<(std::ostream& lhs, const hstring& rhs) {
+        return lhs << rhs.str_m;
+    }
 };
 
 class SettingsNode;
@@ -56,10 +64,10 @@ class Inner {
   protected:
     virtual bool as_bool() const = 0;
     virtual int as_int() const = 0;
-    virtual int as_uint() const = 0;
-    virtual std::size_t as_size_t() const = 0;
+    virtual unsigned int as_uint() const = 0;
+    virtual unsigned long as_ulint() const = 0;
     virtual double as_double() const = 0;
-    virtual float as_float() const { return as_double(); }
+    virtual float as_float() const { return static_cast<float>(as_double()); }
     virtual std::string as_string() const = 0;
 
     virtual Inner* get(const char* key) const = 0;
@@ -99,8 +107,8 @@ class InnerYAML : public Inner {
     explicit InnerYAML(const YAML::Node node_p) : node(node_p){};
     inline bool as_bool() const override { return node.as<bool>(); }
     inline int as_int() const override { return node.as<int>(); }
-    inline int as_uint() const override { return node.as<unsigned int>(); }
-    inline std::size_t as_size_t() const override { return node.as<std::size_t>(); }
+    inline unsigned int as_uint() const override { return node.as<unsigned int>(); }
+    inline unsigned long as_ulint() const override { return node.as<unsigned long>(); }
     inline double as_double() const override { return node.as<double>(); }
     inline float as_float() const override { return node.as<float>(); }
     inline std::string as_string() const override { return node.as<std::string>(); }
@@ -280,6 +288,8 @@ class SettingsNode {
 
     inline bool empty() const { return !inner || inner->empty(); }
     inline bool is_scalar() const { return inner && inner->is_scalar(); }
+    inline bool is_sequence() const { return inner && inner->is_sequence(); }
+    inline bool is_map() const { return inner && inner->is_map(); }
     inline bool has(const char* key) const { return inner && inner->has(key); }
     inline bool has(const std::string& key) const { return inner && inner->has(key); }
 
@@ -381,10 +391,10 @@ inline unsigned int SettingsNode::as_inner<unsigned int>() const {
 }
 
 template<>
-inline std::size_t SettingsNode::as_inner<std::size_t>() const {
+inline unsigned long SettingsNode::as_inner<unsigned long>() const {
     check();
     check_scalar();
-    return inner->as_size_t();
+    return inner->as_ulint();
 }
 
 template<>
