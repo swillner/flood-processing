@@ -67,17 +67,19 @@ class Downscaling : public pipeline::Module {
         Area{"as4", {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN()}, {10256, 10263}, nullptr, nullptr, nullptr},
         Area{"na2", {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN()}, {9102, 8384}, nullptr, nullptr, nullptr},
         Area{"eu3", {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN()}, {6888, 7385}, nullptr, nullptr, nullptr}};
-    const std::size_t med_lon_count = 8640;
-    const std::size_t med_lat_count = 4320;
+    std::size_t target_lon_count;
+    std::size_t target_lat_count;
     const std::size_t coarse_lon_count = 1440;
     const std::size_t coarse_lat_count = 720;
-    const float med_cellsize = 1. / 24.;
+    const std::size_t fine_lon_count = 360 * 200;
+    const std::size_t fine_lat_count = 180 * 200;
     const float fine_cell_size = 1. / 200.;
     std::string map_path;
     std::string flddph_filename;
     std::string flddph_varname;
     std::string fldfrc_filename;
     std::string fldfrc_varname;
+    std::size_t reaggregate_factor;
 
     inline void coarse_to_fine(const Area& area, const nvector::View<T, 2>& coarse_flddph, nvector::Vector<T, 2>* fine_flddph);
     template<typename Function>

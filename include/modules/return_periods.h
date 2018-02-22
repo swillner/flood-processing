@@ -25,7 +25,6 @@
 #include <vector>
 #include "nvector.h"
 #include "pipeline.h"
-
 namespace settings {
 class SettingsNode;
 }

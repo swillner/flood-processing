@@ -18,18 +18,18 @@
 */
 
 #include "modules/rasterization.h"
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-#include "tqdm/tqdm.h"
-#endif
+#include "ProgressBar.h"
+#include <algorithm>
+#include <vector>
+#ifdef FLOOD_PROCESSING_WITH_GDAL
 #include <gdal_alg.h>
 #include <gdal_priv.h>
 #include <ogrsf_frmts.h>
-#include <algorithm>
-#include <vector>
 #undef CPL_CVSID
 #define CPL_CVSID(string)
 #include "../src/gdal/gdalrasterize.cpp"
 #include "../src/gdal/llrasterize.cpp"
+#endif
 
 namespace flood_processing {
 namespace modules {
@@ -44,9 +44,14 @@ Rasterization<T>::Rasterization(const settings::SettingsNode& settings) {
     adjust_scale = settings["adjust_scale"].as<std::size_t>(1);
     adjust_max = settings["adjust_max"].as<bool>(false);
     invalid_value = settings["invalid_value"].as<T>(std::numeric_limits<T>::quiet_NaN());
+#ifdef FLOOD_PROCESSING_WITH_GDAL
     GDALAllRegister();
+#else
+    throw std::runtime_error("GDAL not supported by this binary");
+#endif
 }
 
+#ifdef FLOOD_PROCESSING_WITH_GDAL
 template<typename T>
 static T most_common(std::vector<T>& vec) {
     std::sort(std::begin(vec), std::end(vec), [](T a, T b) { return (a < b || std::isnan(b)) && !std::isnan(a); });
@@ -75,17 +80,12 @@ static T most_common(std::vector<T>& vec) {
     }
     return result;
 }
+#endif
 
+#ifdef FLOOD_PROCESSING_WITH_GDAL
 template<typename T>
 inline void Rasterization<T>::combine_fine(const nvector::View<T, 2>& fine_raster, nvector::View<T, 2>& raster) {
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    const auto size = raster.template size<0>() * raster.template size<1>();
-    tqdm::Params p;
-    p.desc = "Combining";
-    p.ascii = "";
-    p.f = stdout;
-    tqdm::RangeTqdm<std::size_t> it{tqdm::RangeIterator<std::size_t>(size), tqdm::RangeIterator<std::size_t>(size, size), p};
-#endif
+    ProgressBar progress("Combining", raster.template size<0>() * raster.template size<1>());
     raster.foreach_parallel([&](std::size_t lat, std::size_t lon, T& n) {
         std::vector<T> inner;
         inner.reserve(adjust_scale * adjust_scale);
@@ -102,25 +102,15 @@ inline void Rasterization<T>::combine_fine(const nvector::View<T, 2>& fine_raste
         } else {
             n = most_common(inner);
         }
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-#pragma omp critical(output)
-        { ++it; }
-#endif
+        progress.tick();
     });
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    it.close();
-#endif
 }
+#endif
 
+#ifdef FLOOD_PROCESSING_WITH_GDAL
 template<typename T>
 inline void Rasterization<T>::advance(nvector::View<T, 2>& result, std::size_t max_advance) {
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    tqdm::Params p;
-    p.desc = "Advancing";
-    p.ascii = "";
-    p.f = stdout;
-    tqdm::RangeTqdm<std::size_t> it{tqdm::RangeIterator<std::size_t>(max_advance), tqdm::RangeIterator<std::size_t>(max_advance, max_advance), p};
-#endif
+    ProgressBar progress("Advancing", max_advance);
     nvector::Vector<T, 2> last(0, result.template size<0>(), result.template size<1>());
     for (std::size_t i = 0; i < max_advance; ++i) {
         std::copy(std::begin(result), std::end(result), std::begin(last));
@@ -162,15 +152,12 @@ inline void Rasterization<T>::advance(nvector::View<T, 2>& result, std::size_t m
         if (!found) {
             break;
         }
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-        ++it;
-#endif
+        progress.tick();
     }
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    it.close();
-#endif
 }
+#endif
 
+#ifdef FLOOD_PROCESSING_WITH_GDAL
 template<typename T>
 template<typename Function>
 inline void Rasterization<T>::rasterize(nvector::View<T, 2>& result, Function&& func) {
@@ -205,13 +192,7 @@ inline void Rasterization<T>::rasterize(nvector::View<T, 2>& result, Function&& 
 
     std::vector<double> data(lat_count * lon_count, std::numeric_limits<double>::quiet_NaN());
     const std::size_t size = inlayer->GetFeatureCount();
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    tqdm::Params p;
-    p.desc = "Rasterizing";
-    p.ascii = "";
-    p.f = stdout;
-    tqdm::RangeTqdm<std::size_t> it{tqdm::RangeIterator<std::size_t>(size), tqdm::RangeIterator<std::size_t>(size, size), p};
-#endif
+    ProgressBar progress("Rasterizing", size);
     inlayer->ResetReading();
 #pragma omp parallel for default(shared) schedule(dynamic)
     for (std::size_t i = 0; i < size; ++i) {
@@ -235,24 +216,19 @@ inline void Rasterization<T>::rasterize(nvector::View<T, 2>& result, Function&& 
                                transform                                                          // void *pTransformArg
         );
         OGRFeature::DestroyFeature(infeature);
-        // OGRGeometryFactory::destroyGeometry(geometry);
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-#pragma omp critical(output)
-        { ++it; }
-#endif
+        progress.tick();
     }
     GDALClose(infile);
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    it.close();
-#endif
 
     GDALDestroyTransformer(transform);
 
     std::move(std::begin(data), std::end(data), std::begin(result));
 }
+#endif
 
 template<typename T>
 void Rasterization<T>::run(pipeline::Pipeline* p) {
+#ifdef FLOOD_PROCESSING_WITH_GDAL
     const auto resolution_mask = p->consume<nvector::View<T, 2>>(resolution_mask_name);
     auto raster =
         std::make_shared<nvector::Vector<T, 2>>(std::numeric_limits<T>::quiet_NaN(), resolution_mask->template size<0>(), resolution_mask->template size<1>());
@@ -275,16 +251,20 @@ void Rasterization<T>::run(pipeline::Pipeline* p) {
     }
     if (!std::isnan(invalid_value)) {
         raster->foreach_parallel([&](std::size_t lat, std::size_t lon, T& n) {
+            (void)lat;
+            (void)lon;
             if (n == invalid_value) {
                 n = std::numeric_limits<T>::quiet_NaN();
             }
         });
     }
     p->provide<nvector::Vector<T, 2>>("raster", raster);
+#endif
 }
 
 template<typename T>
 void RegionIndexRasterization<T>::run(pipeline::Pipeline* p) {
+#ifdef FLOOD_PROCESSING_WITH_GDAL
     const auto regions = p->consume<std::vector<std::string>>("regions");
     const auto resolution_mask = p->consume<nvector::View<T, 2>>(resolution_mask_name);
     auto raster =
@@ -313,6 +293,7 @@ void RegionIndexRasterization<T>::run(pipeline::Pipeline* p) {
         advance(*raster, max_advance);
     }
     p->provide<nvector::Vector<T, 2>>("region_index_raster", raster);
+#endif
 }
 
 template class Rasterization<float>;

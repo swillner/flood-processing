@@ -21,6 +21,7 @@
 #include <iostream>
 #include <stdexcept>
 #include "grid_modules.h"
+#include "modules/sum_per_region.h"
 #include "modules/downscaling.h"
 #include "modules/rasterization.h"
 #include "modules/return_level_lookup.h"
@@ -76,6 +77,12 @@ static void run(const settings::SettingsNode& settings) {
                 break;
             case settings::hstring::hash("region_index_rasterization"):
                 p.register_module(new flood_processing::modules::RegionIndexRasterization<T>(m));
+                break;
+            case settings::hstring::hash("sum_per_region"):
+                p.register_module(new flood_processing::modules::SumPerRegion<T>(m));
+                break;
+            case settings::hstring::hash("per_region_writer2d"):
+                p.register_module(new flood_processing::modules::PerRegionWriter2d<T>(m));
                 break;
             default:
                 throw std::runtime_error("unknown module '" + std::string(mod) + "'");

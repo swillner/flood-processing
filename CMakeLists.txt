@@ -19,6 +19,7 @@ cmake_minimum_required(VERSION 2.8)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 include(cmake/helpers.cmake)
+include(cmake/libraries.cmake)
 
 set_default_build_type(Release)
 
@@ -48,27 +49,21 @@ if(WITH_TQDM)
   target_include_directories(flood_processing PRIVATE lib/tqdm.cpp/include)
 endif()
 
-#include NetCDF C library
-find_package(NETCDF REQUIRED)
-message(STATUS "NetCDF include directory: ${NETCDF_INCLUDE_DIR}")
-message(STATUS "NetCDF library: ${NETCDF_LIBRARY}")
-target_link_libraries(flood_processing netcdf)
+include_netcdf_cxx4(flood_processing ON v4.3.0)
 
-#include NetCDF C++ library
-find_package(NETCDF_CPP4 REQUIRED)
-message(STATUS "NetCDF_c++4 include directory: ${NETCDF_CPP4_INCLUDE_DIR}")
-message(STATUS "NetCDF_c++4 library: ${NETCDF_CPP4_LIBRARY}")
-target_link_libraries(flood_processing netcdf_c++4)
-
-#include GDAL library
-find_package(GDAL REQUIRED)
-message(STATUS "GDAL include directory: ${GDAL_INCLUDE_DIR}")
-message(STATUS "GDAL library: ${GDAL_LIBRARY}")
-mark_as_advanced(GDAL_CONFIG GDAL_INCLUDE_DIR GDAL_LIBRARY)
-target_link_libraries(flood_processing gdal)
-target_include_directories(flood_processing PRIVATE ${GDAL_INCLUDE_DIR})
+option(WITH_GDAL "" OFF)
+if(WITH_GDAL)
+  #include GDAL library
+  find_package(GDAL REQUIRED)
+  message(STATUS "GDAL include directory: ${GDAL_INCLUDE_DIR}")
+  message(STATUS "GDAL library: ${GDAL_LIBRARY}")
+  mark_as_advanced(GDAL_CONFIG GDAL_INCLUDE_DIR GDAL_LIBRARY)
+  target_link_libraries(flood_processing gdal)
+  target_include_directories(flood_processing PRIVATE ${GDAL_INCLUDE_DIR})
+  target_compile_definitions(flood_processing PRIVATE FLOOD_PROCESSING_WITH_GDAL)
+endif()
 
 include(lib/settingsnode/settingsnode.cmake)
-target_link_libraries(flood_processing settingsnode)
+include_settingsnode(flood_processing)
 
 add_cpp_tools(flood_processing)

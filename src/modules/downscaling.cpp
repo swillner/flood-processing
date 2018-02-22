@@ -20,9 +20,7 @@
 #include "modules/downscaling.h"
 #include "FortranGrid.h"
 #include "netcdf/File.h"
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-#include "tqdm/tqdm.h"
-#endif
+#include "ProgressBar.h"
 
 namespace flood_processing {
 namespace modules {
@@ -42,8 +40,6 @@ inline void Downscaling<T>::coarse_to_fine(const Area& area, const nvector::View
             } else {
                 *p_fine_flddph = 0.0;
             }
-            //} else { // already set
-            //    *p_fine_flddph = std::numeric_limits<T>::quiet_NaN();
         }
         ++p_fine_flddph;
         ++x;
@@ -71,8 +67,8 @@ inline void Downscaling<T>::fine_to_med_dx_dy(std::size_t area_size_x, bool area
             dlon = fine_cell_size * dx;
             dlat = -fine_cell_size * dy;
         }
-        func(std::min(static_cast<std::size_t>(std::max((90. - *lat) * 24. + dlat * 8., 0.0)), med_lat_count - 1),
-             std::min(static_cast<std::size_t>(std::max((180. + *lon) * 24. + dlon * 8., 0.0)), med_lon_count - 1),
+        func(std::min(static_cast<std::size_t>(std::max((90. - *lat) * reaggregate_factor + dlat * reaggregate_factor / 3., 0.0)), target_lat_count - 1),
+             std::min(static_cast<std::size_t>(std::max((180. + *lon) * reaggregate_factor + dlon * reaggregate_factor / 3., 0.0)), target_lon_count - 1),
              *p_fine_flddph, *(p_fine_flddph + offset));
     }
 }
@@ -108,30 +104,36 @@ inline void Downscaling<T>::fine_to_med(Area& area, nvector::Vector<T, 2>* fine_
                     *lon = area.origin.lon + fine_cell_size * (x + 0.5);
                     *lat = area.origin.lat - fine_cell_size * (y + 0.5);
                 }
-                if (x > 0) {
+                if (reaggregate_factor < 200) {
+                    if (x > 0) {
+                        if (y > 0) {
+                            fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, -1, -1, std::forward<Function>(func));
+                        }
+                        fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, -1, 0, std::forward<Function>(func));
+                        if (y < area.size.y - 1) {
+                            fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, -1, 1, std::forward<Function>(func));
+                        }
+                    }
                     if (y > 0) {
-                        fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, -1, -1, std::forward<Function>(func));
+                        fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, 0, -1, std::forward<Function>(func));
                     }
-                    fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, -1, 0, std::forward<Function>(func));
+                    fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, 0, 0, std::forward<Function>(func));
                     if (y < area.size.y - 1) {
-                        fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, -1, 1, std::forward<Function>(func));
+                        fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, 0, 1, std::forward<Function>(func));
                     }
-                }
-                if (y > 0) {
-                    fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, 0, -1, std::forward<Function>(func));
-                }
-                fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, 0, 0, std::forward<Function>(func));
-                if (y < area.size.y - 1) {
-                    fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, 0, 1, std::forward<Function>(func));
-                }
-                if (x < area.size.x - 1) {
-                    if (y > 0) {
-                        fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, 1, -1, std::forward<Function>(func));
+                    if (x < area.size.x - 1) {
+                        if (y > 0) {
+                            fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, 1, -1, std::forward<Function>(func));
+                        }
+                        fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, 1, 0, std::forward<Function>(func));
+                        if (y < area.size.y - 1) {
+                            fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, 1, 1, std::forward<Function>(func));
+                        }
                     }
-                    fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, 1, 0, std::forward<Function>(func));
-                    if (y < area.size.y - 1) {
-                        fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, 1, 1, std::forward<Function>(func));
-                    }
+                } else {
+                    const auto lon_ = std::min(static_cast<std::size_t>((180. + *lon) / fine_cell_size), target_lon_count - 1);
+                    const auto lat_ = std::min(static_cast<std::size_t>((90. - *lat) / fine_cell_size), target_lat_count - 1);
+                    func(lat_, lon_, *p_fine_flddph, *p_fine_flddph);
                 }
             }
             if (area_has_lonlat) {
@@ -150,6 +152,17 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
     flddph_varname = settings["downscaled_flood_depth"]["varname"].as<std::string>();
     fldfrc_filename = settings["downscaled_flood_fraction"]["filename"].as<std::string>();
     fldfrc_varname = settings["downscaled_flood_fraction"]["varname"].as<std::string>();
+    reaggregate_factor = settings["reaggregate_factor"].as<std::size_t>();
+    if (reaggregate_factor > 200) {
+        throw std::runtime_error("reaggregate_factor must be less than or equal 200");
+    }
+    if (reaggregate_factor < 200) {
+        if (reaggregate_factor % 3 != 0) {
+            throw std::runtime_error("reaggregate_factor must be 200 or a multiple of 3");
+        } else if (fine_lat_count % (reaggregate_factor / 3) != 0) {
+            throw std::runtime_error("invalid reaggregate_factor");
+        }
+    }
 }
 
 template<typename T>
@@ -165,11 +178,16 @@ void Downscaling<T>::run(pipeline::Pipeline* p) {
     auto coarse_flddph = p->consume<nvector::View<T, 3>>("return_levels_thresholded");
     const auto projection_times = p->consume<netCDF::DimVar<double>>("projection_times");
     netCDF::File flddph_file(flddph_filename, 'w');
-    netCDF::NcVar flddph_var =
-        flddph_file.var<T>(flddph_varname, {flddph_file.dimvar(*projection_times), flddph_file.lat(med_lat_count), flddph_file.lon(med_lon_count)});
     netCDF::File fldfrc_file(fldfrc_filename, 'w');
-    netCDF::NcVar fldfrc_var =
-        fldfrc_file.var<T>(fldfrc_varname, {fldfrc_file.dimvar(*projection_times), fldfrc_file.lat(med_lat_count), fldfrc_file.lon(med_lon_count)});
+    if (reaggregate_factor < 200) {
+        target_lon_count = 360 * reaggregate_factor;
+        target_lat_count = 180 * reaggregate_factor;
+    } else {
+        target_lon_count = fine_lon_count;
+        target_lat_count = fine_lat_count;
+    }
+    netCDF::NcVar flddph_var = flddph_file.var<T>(flddph_varname, {flddph_file.dimvar(*projection_times), flddph_file.lat(target_lat_count), flddph_file.lon(target_lon_count)});
+    netCDF::NcVar fldfrc_var = fldfrc_file.var<T>(fldfrc_varname, {fldfrc_file.dimvar(*projection_times), fldfrc_file.lat(target_lat_count), fldfrc_file.lon(target_lon_count)});
     downscale(*coarse_flddph, flddph_file, flddph_var, fldfrc_file, fldfrc_var);
     for (auto& area : areas) {
         area.grid.reset();
@@ -183,18 +201,11 @@ void Downscaling<T>::run(pipeline::Pipeline* p) {
 template<typename T>
 void Downscaling<T>::downscale(
     nvector::View<T, 3>& flddph, netCDF::File& result_flddph, netCDF::NcVar result_flddph_var, netCDF::File& result_fldfrc, netCDF::NcVar result_fldfrc_var) {
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    const auto total = flddph.template size<0>();
-    tqdm::Params p;
-    p.desc = "Downscaling";
-    p.ascii = "";
-    p.f = stdout;
-    tqdm::RangeTqdm<int> it{tqdm::RangeIterator<int>(total), tqdm::RangeIterator<int>(total, total), p};
-#endif
+    ProgressBar progress("Downscaling", flddph.template size<0>());
     flddph.template split<false, true, true>().foreach_element([&](std::size_t index, const nvector::View<T, 2>& coarse_flddph) {
-        nvector::Vector<T, 2> flddph(0, med_lat_count, med_lon_count);
-        nvector::Vector<T, 2> fldfrc(0, med_lat_count, med_lon_count);
-        nvector::Vector<T, 2> fldnum(0, med_lat_count, med_lon_count);
+        nvector::Vector<T, 2> flddph(0, target_lat_count, target_lon_count);
+        nvector::Vector<T, 2> fldfrc(0, target_lat_count, target_lon_count);
+        nvector::Vector<T, 2> fldnum(0, target_lat_count, target_lon_count);
 #pragma omp parallel for default(shared) schedule(dynamic)
         for (std::size_t area_i = 0; area_i < areas.size(); ++area_i) {
             auto& area = areas[area_i];
@@ -213,7 +224,7 @@ void Downscaling<T>::downscale(
         T* num = &fldnum.data()[0];
         T* dph = &flddph.data()[0];
         T* frc = &fldfrc.data()[0];
-        for (std::size_t i = 0; i < med_lon_count * med_lat_count; ++i) {
+        for (std::size_t i = 0; i < target_lon_count * target_lat_count; ++i) {
             if (*num > 0) {
                 *frc /= *num;
             } else {
@@ -226,15 +237,9 @@ void Downscaling<T>::downscale(
         }
         result_flddph.set<T, 2>(result_flddph_var, flddph, index);
         result_fldfrc.set<T, 2>(result_fldfrc_var, fldfrc, index);
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-#pragma omp critical(output)
-        { ++it; }
-#endif
+        progress.tick();
         return true;
     });
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    it.close();
-#endif
 }
 
 template class Downscaling<float>;

@@ -33,13 +33,6 @@
 
 namespace netCDF {
 
-inline void debugout() { std::cout << std::endl; }
-template<typename Arg, typename... Args>
-inline void debugout(Arg arg, Args... args) {
-    std::cout << arg << " ";
-    debugout(args...);
-}
-
 template<typename T>
 struct NetCDFType {};
 template<>
@@ -87,10 +80,10 @@ class DimVar : public std::vector<T> {
     NcDim write_to(NcFile& file) const {
         netCDF::NcDim result = file.addDim(name_m, size());
         netCDF::NcVar var = file.addVar(name_m, NetCDFType<T>::type, {result});
-        var.putVar(&(*this)[0]);
         for (const auto& att : attributes) {
             var.putAtt(std::get<0>(att), std::get<1>(att), std::get<2>(att), std::get<3>(att));
         }
+        var.putVar(&(*this)[0]);
         return result;
     }
     const std::string& name() const { return name_m; }
@@ -204,15 +197,6 @@ class File : public netCDF::NcFile {
     template<unsigned char dim>
     inline std::size_t size(const netCDF::NcVar& var) const {
         return var.getDim(dim).getSize();
-    }
-
-    netCDF::NcDim time(std::size_t steps_count) {  // TODO
-        netCDF::NcDim time_dim = addDim("time", steps_count);
-        netCDF::NcVar time_var = addVar("time", NetCDFType<double>::type, {time_dim});  // TODO double
-        for (std::size_t t = 0; t < steps_count; ++t) {
-            time_var.putVar({t}, (double)t);
-        }
-        return time_dim;
     }
 
     netCDF::NcDim lat(std::size_t lat_count) {

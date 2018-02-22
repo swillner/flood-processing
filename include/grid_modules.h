@@ -181,9 +181,7 @@ class RegionRasterGridWriter2dModule : public GridWriter2dModule<T> {
         }
         file.set<const char*>(file.var<const char*>(regionvarname, {file.addDim(regionvarname, regions->size())}), regions_char);
     }
-    inline pipeline::ModuleDescription describe() override {
-        return pipeline::ModuleDescription{"region_raster_grid_writer2d", {inputname, "regions"}, {}};
-    }
+    inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"region_raster_grid_writer2d", {inputname, "regions"}, {}}; }
 };
 
 template<typename T>
@@ -205,7 +203,9 @@ class GridWriter3dModule : public pipeline::Module {
         auto grids = p->consume<nvector::Vector<T, 3>>(inputgridsname);
         auto dim1 = p->consume<netCDF::DimVar<double>>(inputdim1name);
         netCDF::File file(filename, 'w');
-        // TODO check size
+        if (grids->template size<0>() != dim1->size()) {
+            throw std::runtime_error("Sizes do not match: " + inputgridsname + " and " + inputdim1name);
+        }
         netCDF::NcVar var = file.var<T>(varname, {file.dimvar(*dim1), file.lat(grids->template size<1>()), file.lon(grids->template size<2>())});
         file.set<T>(var, *grids);
     }

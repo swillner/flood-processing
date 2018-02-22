@@ -21,37 +21,10 @@
 #include "lmoments.h"
 #include "nvector.h"
 #include "settingsnode.h"
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-#include "tqdm/tqdm.h"
-#endif
+#include "ProgressBar.h"
 
 namespace flood_processing {
 namespace modules {
-
-// http://www.itl.nist.gov/div898/handbook/eda/section3/eda35e.htm
-template<typename T>
-template<typename Distribution>
-inline T ReturnPeriods<T>::anderson_darling_test(const std::vector<T>& data, const Distribution& d) {
-    // TODO sort data
-    const auto N = static_cast<T>(data.size());
-    T res = N;
-    for (std::size_t i = 0; i < data.size(); ++i) {
-        res += (2 * i + 1) * (std::log(d.cdf(data[i])) + std::log(1 - d.cdf(data[N - 1 - i]))) / N;
-    }
-    return std::sqrt(-res);
-}
-
-// http://www.itl.nist.gov/div898/handbook/eda/section3/eda35g.htm
-template<typename T>
-template<typename Distribution>
-inline T ReturnPeriods<T>::kolmogorov_smirnov_test(const std::vector<T>& data, const Distribution& d) {
-    T res = 0;
-    const auto N = static_cast<T>(data.size());
-    for (std::size_t i = 0; i < data.size(); ++i) {
-        res = std::max(res, std::max(d.cdf(data[i]) - i / N, (i + 1) / N - d.cdf(data[i])));
-    }
-    return res;
-}
 
 template<typename T>
 nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& history_discharge,
@@ -70,14 +43,7 @@ nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& hi
     if (lat_count != history_discharge.template size<1>() || lon_count != history_discharge.template size<2>()) {
         throw std::runtime_error("return period grids differ");
     }
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    const auto total = lat_count * lon_count;
-    tqdm::Params p;
-    p.desc = "Return periods";
-    p.ascii = "";
-    p.f = stdout;
-    tqdm::RangeTqdm<int> it{tqdm::RangeIterator<int>(total), tqdm::RangeIterator<int>(total, total), p};
-#endif
+    ProgressBar progress("Return periods", lat_count * lon_count);
     auto result_grid = nvector::Vector<T, 3>(std::numeric_limits<T>::quiet_NaN(), size, lat_count, lon_count);
     nvector::foreach_split_parallel<nvector::Split<true, false, false>>(
         std::make_tuple(history_discharge, projection_discharge, result_grid),
@@ -102,14 +68,8 @@ nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& hi
                     }
                 }
             }
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-#pragma omp critical(output)
-            { ++it; }
-#endif
+            progress.tick();
         });
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    it.close();
-#endif
     return result_grid;
 }
 

@@ -19,9 +19,7 @@
 
 #include "modules/return_period_threshold.h"
 #include "nvector.h"
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-#include "tqdm/tqdm.h"
-#endif
+#include "ProgressBar.h"
 
 namespace flood_processing {
 namespace modules {
@@ -39,14 +37,7 @@ void ReturnPeriodThreshold<T>::run(pipeline::Pipeline* p) {
         raster = p->consume<nvector::Vector<T, 2>>("raster");
     }
 
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    const auto total = lat_count * lon_count;
-    tqdm::Params params;
-    params.desc = "Return period threshold";
-    params.ascii = "";
-    params.f = stdout;
-    tqdm::RangeTqdm<int> it{tqdm::RangeIterator<int>(total), tqdm::RangeIterator<int>(total, total), params};
-#endif
+    ProgressBar progress("Return period threshold", lat_count * lon_count);
     nvector::foreach_split_parallel<nvector::Split<true, false, false>>(
         std::make_tuple(*return_periods, *return_levels, *return_levels_thresholded),
         [&](std::size_t lat, std::size_t lon, nvector::View<T, 1>& return_periods_l, nvector::View<T, 1>& return_levels_l,
@@ -67,14 +58,8 @@ void ReturnPeriodThreshold<T>::run(pipeline::Pipeline* p) {
                                           return true;
                                       });
             }
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-#pragma omp critical(output)
-            { ++it; }
-#endif
+            progress.tick();
         });
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    it.close();
-#endif
     p->provide<nvector::Vector<T, 3>>("return_levels_thresholded", return_levels_thresholded);
 }
 

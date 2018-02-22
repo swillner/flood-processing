@@ -19,9 +19,7 @@
 
 #include "modules/return_level_lookup.h"
 #include "nvector.h"
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-#include "tqdm/tqdm.h"
-#endif
+#include "ProgressBar.h"
 
 namespace flood_processing {
 namespace modules {
@@ -34,14 +32,7 @@ void ReturnLevelLookup<T>::run(pipeline::Pipeline* p) {
     const auto lat_count = return_periods->template size<1>();
     const auto lon_count = return_periods->template size<2>();
     auto return_levels = std::make_shared<nvector::Vector<T, 3>>(std::numeric_limits<T>::quiet_NaN(), return_periods->template size<0>(), lat_count, lon_count);
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    const auto total = lat_count * lon_count;
-    tqdm::Params params;
-    params.desc = "Return level lookup";
-    params.ascii = "";
-    params.f = stdout;
-    tqdm::RangeTqdm<int> it{tqdm::RangeIterator<int>(total), tqdm::RangeIterator<int>(total, total), params};
-#endif
+    ProgressBar progress("Return level lookup", lat_count * lon_count);
     nvector::foreach_split_parallel<nvector::Split<true, false, false>>(
         std::make_tuple(*return_periods, *return_levels_mapping, *return_levels),
         [&](std::size_t lat, std::size_t lon, nvector::View<T, 1>& return_periods_l, nvector::View<T, 1>& return_levels_mapping_l,
@@ -65,14 +56,8 @@ void ReturnLevelLookup<T>::run(pipeline::Pipeline* p) {
                     return true;
                 });
             }
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-#pragma omp critical(output)
-            { ++it; }
-#endif
+            progress.tick();
         });
-#ifdef FLOOD_PROCESSING_WITH_TQDM
-    it.close();
-#endif
     p->provide<nvector::Vector<T, 3>>("return_levels", return_levels);
 }
 
