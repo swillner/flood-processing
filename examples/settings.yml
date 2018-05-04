@@ -1,0 +1,29 @@
+verbose: true
+steps:
+  - module: grid_reader3d
+    filename: fldfrc_max.nc
+    varname: fldfrc
+    output:
+      dim1: time
+  - module: grid_reader2d
+    filename: iso_raster_adv.nc
+    varname: iso
+    output: region_index_raster
+  - module: array_reader
+    filename: iso_raster_adv.nc
+    varname: index
+    output: regions
+  - module: grid_reader2d
+    filename: population_2.5min_2005.nc
+    varname: population
+    output: population
+  - module: affected_population_per_region
+    filename: fldfrc_max.nc
+    varname: fldfrc
+  - module: per_region_writer2d
+    filename: out.nc
+    input:
+      array: affected_population
+      dim1: time
+    varname: affected_population
+    regionvarname: index

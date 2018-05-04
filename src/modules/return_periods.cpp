@@ -54,9 +54,17 @@ nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& hi
                 try {
                     std::vector<T> view(to - from + 1);
                     std::partial_sort_copy(std::begin(history_series) + from, std::begin(history_series) + (to + 1), std::begin(view), std::end(view));
-                    lmoments::GEV<T> d(view);
+                    std::unique_ptr<lmoments::distribution<T>> d;
+                    switch (distribution) {
+                        case Distribution::GEV:
+                            d.reset(new lmoments::GEV<T>(view));
+                            break;
+                        case Distribution::GUM:
+                            d.reset(new lmoments::GUM<T>(view));
+                            break;
+                    }
                     for (std::size_t i = 0; i < size; ++i) {
-                        T return_period = 1. / (1. - d.cdf(projection_series(i)));
+                        T return_period = 1. / (1. - d->cdf(projection_series(i)));
                         if (return_period > 1000) {
                             return_period = 1000;
                         }
@@ -77,6 +85,16 @@ template<typename T>
 ReturnPeriods<T>::ReturnPeriods(const settings::SettingsNode& settings) {
     from = settings["from"].as<std::size_t>();
     to = settings["to"].as<std::size_t>();
+    switch(settings["fit"].as<settings::hstring>()) {
+        case settings::hstring::hash("gev"):
+            distribution = Distribution::GEV;
+            break;
+        case settings::hstring::hash("gum"):
+            distribution = Distribution::GUM;
+            break;
+        default:
+            throw std::runtime_error("unknown fit method");
+    }
 }
 
 template<typename T>

@@ -181,7 +181,9 @@ class RegionRasterGridWriter2dModule : public GridWriter2dModule<T> {
         }
         file.set<const char*>(file.var<const char*>(regionvarname, {file.addDim(regionvarname, regions->size())}), regions_char);
     }
-    inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"region_raster_grid_writer2d", {inputname, "regions"}, {}}; }
+    inline pipeline::ModuleDescription describe() override {
+        return pipeline::ModuleDescription{"region_raster_grid_writer2d", {inputname, "regions"}, {}};
+    }
 };
 
 template<typename T>

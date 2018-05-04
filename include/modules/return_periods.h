@@ -35,6 +35,10 @@ namespace modules {
 template<typename T>
 class ReturnPeriods : public pipeline::Module {
   protected:
+    enum class Distribution {
+        GEV, GUM
+    };
+    Distribution distribution;
     std::size_t from;
     std::size_t to;
 
