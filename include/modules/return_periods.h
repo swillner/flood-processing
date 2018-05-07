@@ -39,17 +39,16 @@ class ReturnPeriods : public pipeline::Module {
         GEV, GUM
     };
     Distribution distribution;
-    std::size_t from;
-    std::size_t to;
+    std::vector<std::size_t> from_vec;
+    std::vector<std::size_t> to_vec;
+    std::size_t length;
 
     template<typename Distribution>
     inline T anderson_darling_test(const std::vector<T>& data, const Distribution& d);
     template<typename Distribution>
     inline T kolmogorov_smirnov_test(const std::vector<T>& data, const Distribution& d);
     nvector::Vector<T, 3> return_periods(nvector::Vector<T, 3>& history_discharge,
-                                         nvector::Vector<T, 3>& projection_discharge,
-                                         std::size_t from,
-                                         std::size_t to);
+                                         nvector::Vector<T, 3>& projection_discharge);
 
   public:
     ReturnPeriods(const settings::SettingsNode& settings);

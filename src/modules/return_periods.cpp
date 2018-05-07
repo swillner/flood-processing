@@ -28,20 +28,16 @@ namespace modules {
 
 template<typename T>
 nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& history_discharge,
-                                                       nvector::Vector<T, 3>& projection_discharge,
-                                                       std::size_t from,
-                                                       std::size_t to) {
+                                                       nvector::Vector<T, 3>& projection_discharge) {
     const auto size = projection_discharge.template size<0>();
+    const auto history_size = history_discharge.template size<0>();
     const auto lat_count = projection_discharge.template size<1>();
     const auto lon_count = projection_discharge.template size<2>();
-    if (from == 0 && to == 0) {
-        to = size - 1;
-    }
-    if (to < from || to >= history_discharge.template size<0>()) {
-        throw std::runtime_error("return period parameters invalid");
-    }
     if (lat_count != history_discharge.template size<1>() || lon_count != history_discharge.template size<2>()) {
         throw std::runtime_error("return period grids differ");
+    }
+    if (from_vec.empty()) {
+        length = history_size;
     }
     ProgressBar progress("Return periods", lat_count * lon_count);
     auto result_grid = nvector::Vector<T, 3>(std::numeric_limits<T>::quiet_NaN(), size, lat_count, lon_count);
@@ -52,8 +48,22 @@ nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& hi
             (void)lon;
             if (history_series(0) >= 0 && history_series(0) < 1e10 && !std::isnan(history_series(0))) {
                 try {
-                    std::vector<T> view(to - from + 1);
-                    std::partial_sort_copy(std::begin(history_series) + from, std::begin(history_series) + (to + 1), std::begin(view), std::end(view));
+                    std::vector<T> view(length);
+                    if (from_vec.size() == 0) {
+                        std::partial_sort_copy(std::begin(history_series), std::end(history_series), std::begin(view), std::end(view));
+                    } else {
+                        std::size_t offset = 0;
+                        for (std::size_t i = 0; i < from_vec.size(); ++i) {
+                            const auto from = from_vec[i];
+                            const auto to = to_vec[i];
+                            if (to >= history_size) {
+                                throw std::runtime_error("return period parameters invalid");
+                            }
+                            std::copy(std::begin(history_series) + from, std::begin(history_series) + (to + 1), std::begin(view) + offset);
+                            offset += to - from + 1;
+                        }
+                        std::sort(std::begin(view), std::end(view));
+                    }
                     std::unique_ptr<lmoments::distribution<T>> d;
                     switch (distribution) {
                         case Distribution::GEV:
@@ -83,8 +93,26 @@ nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& hi
 
 template<typename T>
 ReturnPeriods<T>::ReturnPeriods(const settings::SettingsNode& settings) {
-    from = settings["from"].as<std::size_t>();
-    to = settings["to"].as<std::size_t>();
+    if (settings.has("from") && settings.has("to")) {
+        for (const auto& it : settings["from"].as_sequence()) {
+            from_vec.push_back(it.as<std::size_t>());
+        }
+        for (const auto& it : settings["to"].as_sequence()) {
+            to_vec.push_back(it.as<std::size_t>());
+        }
+        if (from_vec.size() != to_vec.size()) {
+            throw std::runtime_error("from and to differ in size");
+        }
+        length = 0;
+        for (std::size_t i = 0; i < from_vec.size(); ++i) {
+            const auto from = from_vec[i];
+            const auto to = to_vec[i];
+            if (from > to) {
+                throw std::runtime_error("return period parameters invalid");
+            }
+            length += to - from + 1;
+        }
+    }
     switch(settings["fit"].as<settings::hstring>()) {
         case settings::hstring::hash("gev"):
             distribution = Distribution::GEV;
@@ -101,8 +129,7 @@ template<typename T>
 void ReturnPeriods<T>::run(pipeline::Pipeline* p) {
     auto history_discharge = p->consume<nvector::Vector<T, 3>>("history_discharge");
     auto projection_discharge = p->consume<nvector::Vector<T, 3>>("projection_discharge");
-    p->provide<nvector::Vector<T, 3>>("return_periods",
-                                      std::make_shared<nvector::Vector<T, 3>>(return_periods(*history_discharge, *projection_discharge, from, to)));
+    p->provide<nvector::Vector<T, 3>>("return_periods", std::make_shared<nvector::Vector<T, 3>>(return_periods(*history_discharge, *projection_discharge)));
 }
 
 template class ReturnPeriods<double>;
