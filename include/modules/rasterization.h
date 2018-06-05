@@ -39,6 +39,8 @@ class Rasterization : public pipeline::Module {
     std::size_t adjust_scale;
     T invalid_value;
     bool adjust_max;
+    std::size_t xres;
+    std::size_t yres;
     void advance(nvector::View<T, 2>& result, std::size_t max_advance);
     template<typename Function>
     void rasterize(nvector::View<T, 2>& result, Function&& func);
@@ -48,7 +50,13 @@ class Rasterization : public pipeline::Module {
     Rasterization(const settings::SettingsNode& settings);
     virtual void run(pipeline::Pipeline* p) override;
 
-    virtual inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"rasterization", {resolution_mask_name}, {"raster"}}; }
+    virtual inline pipeline::ModuleDescription describe() override {
+        if (resolution_mask_name.empty()) {
+            return pipeline::ModuleDescription{"rasterization", {}, {"raster"}};
+        } else {
+            return pipeline::ModuleDescription{"rasterization", {resolution_mask_name}, {"raster"}};
+        }
+    }
 };
 
 template<typename T>
@@ -61,16 +69,20 @@ class RegionIndexRasterization : public Rasterization<T> {
     using Rasterization<T>::advance;
     using Rasterization<T>::combine_fine;
     using Rasterization<T>::invalid_value;
+    using Rasterization<T>::xres;
+    using Rasterization<T>::yres;
     std::string altfieldname;
 
   public:
-    RegionIndexRasterization(const settings::SettingsNode& settings) : Rasterization<T>(settings){
-        altfieldname = settings["altfield"].as<std::string>("");
-    };
+    RegionIndexRasterization(const settings::SettingsNode& settings) : Rasterization<T>(settings) { altfieldname = settings["altfield"].as<std::string>(""); };
     void run(pipeline::Pipeline* p) override;
 
     inline pipeline::ModuleDescription describe() override {
-        return pipeline::ModuleDescription{"region_index_rasterization", {"regions", resolution_mask_name}, {"region_index_raster"}};
+        if (resolution_mask_name.empty()) {
+            return pipeline::ModuleDescription{"region_index_rasterization", {"regions"}, {"region_index_raster"}};
+        } else {
+            return pipeline::ModuleDescription{"region_index_rasterization", {"regions", resolution_mask_name}, {"region_index_raster"}};
+        }
     }
 };
 

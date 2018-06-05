@@ -18,9 +18,9 @@
 */
 
 #include "modules/rasterization.h"
-#include "ProgressBar.h"
 #include <algorithm>
 #include <vector>
+#include "ProgressBar.h"
 #ifdef FLOOD_PROCESSING_WITH_GDAL
 #include <gdal_alg.h>
 #include <gdal_priv.h>
@@ -36,7 +36,11 @@ namespace modules {
 
 template<typename T>
 Rasterization<T>::Rasterization(const settings::SettingsNode& settings) {
-    resolution_mask_name = settings["resolution_from"].as<std::string>();
+    resolution_mask_name = settings["resolution_from"].as<std::string>("");
+    if (resolution_mask_name.empty()) {
+        xres = settings["xres"].as<std::size_t>();
+        yres = settings["yres"].as<std::size_t>();
+    }
     shapefilename = settings["shapefile"].as<std::string>();
     layername = settings["layer"].as<std::string>();
     fieldname = settings["field"].as<std::string>();
@@ -229,12 +233,14 @@ inline void Rasterization<T>::rasterize(nvector::View<T, 2>& result, Function&& 
 template<typename T>
 void Rasterization<T>::run(pipeline::Pipeline* p) {
 #ifdef FLOOD_PROCESSING_WITH_GDAL
-    const auto resolution_mask = p->consume<nvector::View<T, 2>>(resolution_mask_name);
-    auto raster =
-        std::make_shared<nvector::Vector<T, 2>>(std::numeric_limits<T>::quiet_NaN(), resolution_mask->template size<0>(), resolution_mask->template size<1>());
+    if (!resolution_mask_name.empty()) {
+        const auto resolution_mask = p->consume<nvector::View<T, 2>>(resolution_mask_name);
+        xres = resolution_mask->template size<0>();
+        yres = resolution_mask->template size<1>();
+    }
+    auto raster = std::make_shared<nvector::Vector<T, 2>>(std::numeric_limits<T>::quiet_NaN(), xres, yres);
     if (adjust_scale > 1) {
-        nvector::Vector<T, 2> fine_raster(std::numeric_limits<T>::quiet_NaN(), adjust_scale * resolution_mask->template size<0>(),
-                                          adjust_scale * resolution_mask->template size<1>());
+        nvector::Vector<T, 2> fine_raster(std::numeric_limits<T>::quiet_NaN(), adjust_scale * xres, adjust_scale * yres);
         rasterize(fine_raster, [&](OGRFeature* feature, std::size_t index) {
             (void)index;
             return feature->GetFieldAsDouble(fieldname.c_str());
@@ -266,9 +272,12 @@ template<typename T>
 void RegionIndexRasterization<T>::run(pipeline::Pipeline* p) {
 #ifdef FLOOD_PROCESSING_WITH_GDAL
     const auto regions = p->consume<std::vector<std::string>>("regions");
-    const auto resolution_mask = p->consume<nvector::View<T, 2>>(resolution_mask_name);
-    auto raster =
-        std::make_shared<nvector::Vector<T, 2>>(std::numeric_limits<T>::quiet_NaN(), resolution_mask->template size<0>(), resolution_mask->template size<1>());
+    if (!resolution_mask_name.empty()) {
+        const auto resolution_mask = p->consume<nvector::View<T, 2>>(resolution_mask_name);
+        xres = resolution_mask->template size<0>();
+        yres = resolution_mask->template size<1>();
+    }
+    auto raster = std::make_shared<nvector::Vector<T, 2>>(std::numeric_limits<T>::quiet_NaN(), xres, yres);
     rasterize(*raster, [&](OGRFeature* feature, std::size_t index) {
         (void)index;
         const auto& id = feature->GetFieldAsString(this->fieldname.c_str());
