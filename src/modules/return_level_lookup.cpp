@@ -18,8 +18,8 @@
 */
 
 #include "modules/return_level_lookup.h"
-#include "nvector.h"
 #include "ProgressBar.h"
+#include "nvector.h"
 
 namespace flood_processing {
 namespace modules {

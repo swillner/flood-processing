@@ -19,8 +19,8 @@
 #define PROGRESSBAR_H
 
 #ifdef FLOOD_PROCESSING_WITH_TQDM
-#include "tqdm/tqdm.h"
 #include <string>
+#include "tqdm/tqdm.h"
 #endif
 
 namespace flood_processing {

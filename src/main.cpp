@@ -21,12 +21,12 @@
 #include <iostream>
 #include <stdexcept>
 #include "grid_modules.h"
-#include "modules/sum_per_region.h"
 #include "modules/downscaling.h"
 #include "modules/rasterization.h"
 #include "modules/return_level_lookup.h"
 #include "modules/return_period_threshold.h"
 #include "modules/return_periods.h"
+#include "modules/sum_per_region.h"
 #include "nvector.h"
 #include "pipeline.h"
 #include "settingsnode.h"

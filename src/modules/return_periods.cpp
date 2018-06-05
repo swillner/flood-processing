@@ -18,17 +18,16 @@
 */
 
 #include "modules/return_periods.h"
+#include "ProgressBar.h"
 #include "lmoments.h"
 #include "nvector.h"
 #include "settingsnode.h"
-#include "ProgressBar.h"
 
 namespace flood_processing {
 namespace modules {
 
 template<typename T>
-nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& history_discharge,
-                                                       nvector::Vector<T, 3>& projection_discharge) {
+nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& history_discharge, nvector::Vector<T, 3>& projection_discharge) {
     const auto size = projection_discharge.template size<0>();
     const auto history_size = history_discharge.template size<0>();
     const auto lat_count = projection_discharge.template size<1>();
@@ -113,7 +112,7 @@ ReturnPeriods<T>::ReturnPeriods(const settings::SettingsNode& settings) {
             length += to - from + 1;
         }
     }
-    switch(settings["fit"].as<settings::hstring>()) {
+    switch (settings["fit"].as<settings::hstring>()) {
         case settings::hstring::hash("gev"):
             distribution = Distribution::GEV;
             break;

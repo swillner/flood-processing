@@ -19,8 +19,8 @@
 
 #include "modules/downscaling.h"
 #include "FortranGrid.h"
-#include "netcdf/File.h"
 #include "ProgressBar.h"
+#include "netcdf/File.h"
 
 namespace flood_processing {
 namespace modules {
@@ -50,7 +50,8 @@ inline void Downscaling<T>::coarse_to_fine(const Area& area, const nvector::View
 
 template<typename T>
 template<typename Function>
-inline void Downscaling<T>::fine_to_med_dx_dy(std::size_t area_size_x, bool area_has_lonlat, T* p_fine_flddph, float* lat, float* lon, int dx, int dy, Function&& func) {
+inline void Downscaling<T>::fine_to_med_dx_dy(
+    std::size_t area_size_x, bool area_has_lonlat, T* p_fine_flddph, float* lat, float* lon, int dx, int dy, Function&& func) {
     const int offset = dy * area_size_x + dx;
     if (!area_has_lonlat || *(lon + offset) > -9999.0) {
         T dlon;
@@ -186,8 +187,10 @@ void Downscaling<T>::run(pipeline::Pipeline* p) {
         target_lon_count = fine_lon_count;
         target_lat_count = fine_lat_count;
     }
-    netCDF::NcVar flddph_var = flddph_file.var<T>(flddph_varname, {flddph_file.dimvar(*projection_times), flddph_file.lat(target_lat_count), flddph_file.lon(target_lon_count)});
-    netCDF::NcVar fldfrc_var = fldfrc_file.var<T>(fldfrc_varname, {fldfrc_file.dimvar(*projection_times), fldfrc_file.lat(target_lat_count), fldfrc_file.lon(target_lon_count)});
+    netCDF::NcVar flddph_var =
+        flddph_file.var<T>(flddph_varname, {flddph_file.dimvar(*projection_times), flddph_file.lat(target_lat_count), flddph_file.lon(target_lon_count)});
+    netCDF::NcVar fldfrc_var =
+        fldfrc_file.var<T>(fldfrc_varname, {fldfrc_file.dimvar(*projection_times), fldfrc_file.lat(target_lat_count), fldfrc_file.lon(target_lon_count)});
     downscale(*coarse_flddph, flddph_file, flddph_var, fldfrc_file, fldfrc_var);
     for (auto& area : areas) {
         area.grid.reset();
@@ -211,14 +214,13 @@ void Downscaling<T>::downscale(
             auto& area = areas[area_i];
             nvector::Vector<T, 2> fine_flddph(-9999.0, area.size.x, area.size.y);
             coarse_to_fine(area, coarse_flddph, &fine_flddph);
-            fine_to_med(area, &fine_flddph,
-                        [&](std::size_t med_lat, std::size_t med_lon, T cell_dph, T dcell_dph) {
-                            if (dcell_dph > 0) {
-                                T& tmp = flddph(med_lat, med_lon);
-                                tmp = std::max(tmp, cell_dph);
-                                ++fldfrc(med_lat, med_lon);
-                            }
-                            ++fldnum(med_lat, med_lon);
+            fine_to_med(area, &fine_flddph, [&](std::size_t med_lat, std::size_t med_lon, T cell_dph, T dcell_dph) {
+                if (dcell_dph > 0) {
+                    T& tmp = flddph(med_lat, med_lon);
+                    tmp = std::max(tmp, cell_dph);
+                    ++fldfrc(med_lat, med_lon);
+                }
+                ++fldnum(med_lat, med_lon);
             });
         }
         T* num = &fldnum.data()[0];

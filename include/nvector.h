@@ -53,7 +53,8 @@ struct foreach_dim {
     }
     template<typename Tref, typename Iterator>
     static inline Tref dereference(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims, Iterator&& it) {
-        return foreach_dim<c + 1, dim>::template dereference<Tref>(index + (std::get<c>(pos) + std::get<c>(dims).begin) * std::get<c>(dims).stride, pos, dims, std::forward<Iterator>(it));
+        return foreach_dim<c + 1, dim>::template dereference<Tref>(index + (std::get<c>(pos) + std::get<c>(dims).begin) * std::get<c>(dims).stride, pos, dims,
+                                                                   std::forward<Iterator>(it));
     }
     static inline void increase(std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
         if (std::get<dim - 1 - c>(pos) == std::get<dim - 1 - c>(dims).size - 1) {
