@@ -68,11 +68,11 @@ inline void Downscaling<T>::fine_to_med_dx_dy(
             dlon = fine_cell_size * dx;
             dlat = -fine_cell_size * dy;
         }
-        func(std::min(static_cast<std::size_t>(std::max((90. - *lat) * inverse_target_cell_size + dlat * inverse_target_cell_size / 3., 0.0)),
-                      target_lat_count - 1),
-             std::min(static_cast<std::size_t>(std::max((180. + *lon) * inverse_target_cell_size + dlon * inverse_target_cell_size / 3., 0.0)),
-                      target_lon_count - 1),
-             *p_fine_flddph, *(p_fine_flddph + offset));
+        const auto lat_ = std::min(static_cast<std::size_t>(std::max((90. - *lat) * inverse_target_cell_size + dlat * inverse_target_cell_size / 3., 0.0)),
+                                   180 * inverse_target_cell_size - 1);
+        const auto lon_ = std::min(static_cast<std::size_t>(std::max((180. + *lon) * inverse_target_cell_size + dlon * inverse_target_cell_size / 3., 0.0)),
+                                   360 * inverse_target_cell_size - 1);
+        func(lat_, lon_, *p_fine_flddph, *(p_fine_flddph + offset));
     }
 }
 
@@ -134,8 +134,8 @@ inline void Downscaling<T>::fine_to_med(Area& area, nvector::Vector<T, 2>* fine_
                         }
                     }
                 } else {
-                    const auto lon_ = std::min(static_cast<std::size_t>((180. + *lon) / fine_cell_size), target_lon_count - 1);
-                    const auto lat_ = std::min(static_cast<std::size_t>((90. - *lat) / fine_cell_size), target_lat_count - 1);
+                    const auto lat_ = std::min(static_cast<std::size_t>((90. - *lat) / fine_cell_size), 180 * inverse_target_cell_size - 1);
+                    const auto lon_ = std::min(static_cast<std::size_t>((180. + *lon) / fine_cell_size), 360 * inverse_target_cell_size - 1);
                     func(lat_, lon_, *p_fine_flddph, *p_fine_flddph);
                 }
             }
@@ -157,7 +157,7 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
     fldfrc_varname = settings["downscaled_flood_fraction"]["varname"].as<std::string>();
 
     inverse_target_cell_size = settings["inverse_target_cell_size"].as<std::size_t>();
-    if (inverse_target_cell_size > 200) {
+    if (inverse_target_cell_size > 200 || inverse_target_cell_size == 0) {
         throw std::runtime_error("inverse_target_cell_size must be less than or equal 200");
     }
     if (inverse_target_cell_size < 200) {
@@ -172,16 +172,16 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
     to_lat = settings["to_lat"].as<int>(90);
     from_lon = settings["from_lon"].as<int>(-180);
     to_lon = settings["to_lon"].as<int>(180);
-    if (from_lat < -90 || from_lat > to_lat) {
+    if (from_lat < -90) {
         throw std::runtime_error("invalid from_lat");
     }
-    if (to_lat > 90) {
+    if (to_lat > 90 || from_lat >= to_lat) {
         throw std::runtime_error("invalid to_lat");
     }
-    if (from_lon < -180 || from_lon > to_lon) {
+    if (from_lon < -180) {
         throw std::runtime_error("invalid from_lon");
     }
-    if (to_lon > 180) {
+    if (to_lon > 180 || from_lon >= to_lon) {
         throw std::runtime_error("invalid to_lon");
     }
     target_lon_count = (to_lon - from_lon) * inverse_target_cell_size;
@@ -230,15 +230,16 @@ void Downscaling<T>::downscale(
             nvector::Vector<T, 2> fine_flddph(-9999.0, area.size.x, area.size.y);
             coarse_to_fine(area, coarse_flddph, &fine_flddph);
             fine_to_med(area, &fine_flddph, [&](std::size_t med_lat, std::size_t med_lon, T cell_dph, T dcell_dph) {
-                if (med_lat >= 200 * (90 + from_lat) && med_lat < 200 * (90 + to_lat) && med_lon >= 200 * (180 + from_lon) && med_lon < 200 * (180 + to_lon)) {
-                    med_lat = med_lat - (90 + from_lat);
-                    med_lon = med_lon - (180 + from_lon);
+                if (med_lat >= inverse_target_cell_size * (90 - to_lat) && med_lat < inverse_target_cell_size * (90 - from_lat)
+                    && med_lon >= inverse_target_cell_size * (180 + from_lon) && med_lon < inverse_target_cell_size * (180 + to_lon)) {
+                    const auto target_lat = static_cast<int>(med_lat) - inverse_target_cell_size * (90 - to_lat);
+                    const auto target_lon = static_cast<int>(med_lon) - inverse_target_cell_size * (180 + from_lon);
                     if (dcell_dph > 0) {
-                        T& tmp = flddph(med_lat, med_lon);
+                        T& tmp = flddph(target_lat, target_lon);
                         tmp = std::max(tmp, cell_dph);
-                        ++fldfrc(med_lat, med_lon);
+                        ++fldfrc(target_lat, target_lon);
                     }
-                    ++fldnum(med_lat, med_lon);
+                    ++fldnum(target_lat, target_lon);
                 }
             });
         }
