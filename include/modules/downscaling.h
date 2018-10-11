@@ -71,15 +71,18 @@ class Downscaling : public pipeline::Module {
     std::size_t target_lat_count;
     const std::size_t coarse_lon_count = 1440;
     const std::size_t coarse_lat_count = 720;
-    const std::size_t fine_lon_count = 360 * 200;
-    const std::size_t fine_lat_count = 180 * 200;
-    const float fine_cell_size = 1. / 200.;
+    const std::size_t fine_inverse_cell_size = 200;
+    const float fine_cell_size = 1. / static_cast<float>(fine_inverse_cell_size);
+    const std::size_t fine_lon_count = 360 * fine_inverse_cell_size;
+    const std::size_t fine_lat_count = 180 * fine_inverse_cell_size;
     std::string map_path;
     std::string flddph_filename;
     std::string flddph_varname;
     std::string fldfrc_filename;
     std::string fldfrc_varname;
     std::size_t reaggregate_factor;
+    int from_lat, to_lat;
+    int from_lon, to_lon;
 
     inline void coarse_to_fine(const Area& area, const nvector::View<T, 2>& coarse_flddph, nvector::Vector<T, 2>* fine_flddph);
     template<typename Function>

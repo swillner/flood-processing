@@ -199,7 +199,7 @@ class File : public netCDF::NcFile {
         return var.getDim(dim).getSize();
     }
 
-    netCDF::NcDim lat(std::size_t lat_count) {
+    netCDF::NcDim lat(std::size_t lat_count, double from_lat = -90.0, double to_lat = 90.0) {
         netCDF::NcDim lat_dim = addDim("lat", lat_count);
         netCDF::NcVar lat_var = addVar("lat", NetCDFType<double>::type, {lat_dim});
         lat_var.putAtt("standard_name", "latitude");
@@ -207,12 +207,12 @@ class File : public netCDF::NcFile {
         lat_var.putAtt("units", "degrees_north");
         lat_var.putAtt("axis", "Y");
         for (unsigned int lat = 0; lat < lat_count; ++lat) {
-            lat_var.putVar({lat}, 90.0 - 180.0 * (lat + 0.5) / lat_count);
+            lat_var.putVar({lat}, to_lat - (to_lat - from_lat) * (lat + 0.5) / lat_count);
         }
         return lat_dim;
     }
 
-    netCDF::NcDim lon(std::size_t lon_count) {
+    netCDF::NcDim lon(std::size_t lon_count, double from_lon = -180.0, double to_lon = 180.0) {
         netCDF::NcDim lon_dim = addDim("lon", lon_count);
         netCDF::NcVar lon_var = addVar("lon", NetCDFType<double>::type, {lon_dim});
         lon_var.putAtt("standard_name", "longitude");
@@ -220,7 +220,7 @@ class File : public netCDF::NcFile {
         lon_var.putAtt("units", "degrees_east");
         lon_var.putAtt("axis", "X");
         for (unsigned int lon = 0; lon < lon_count; ++lon) {
-            lon_var.putVar({lon}, -180.0 + 360.0 * (lon + 0.5) / lon_count);
+            lon_var.putVar({lon}, from_lon + (to_lon - from_lon) * (lon + 0.5) / lon_count);
         }
         return lon_dim;
     }

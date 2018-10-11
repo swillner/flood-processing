@@ -19,8 +19,8 @@
 
 #include "modules/downscaling.h"
 #include "FortranGrid.h"
-#include "progressbar.h"
 #include "netcdf/File.h"
+#include "progressbar.h"
 
 namespace flood_processing {
 namespace modules {
@@ -153,6 +153,7 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
     flddph_varname = settings["downscaled_flood_depth"]["varname"].as<std::string>();
     fldfrc_filename = settings["downscaled_flood_fraction"]["filename"].as<std::string>();
     fldfrc_varname = settings["downscaled_flood_fraction"]["varname"].as<std::string>();
+
     reaggregate_factor = settings["reaggregate_factor"].as<std::size_t>();
     if (reaggregate_factor > 200) {
         throw std::runtime_error("reaggregate_factor must be less than or equal 200");
@@ -164,6 +165,25 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
             throw std::runtime_error("invalid reaggregate_factor");
         }
     }
+
+    from_lat = settings["downscaled_flood_fraction"]["from_lat"].as<int>(-90);
+    to_lat = settings["downscaled_flood_fraction"]["to_lat"].as<int>(90);
+    from_lon = settings["downscaled_flood_fraction"]["from_lon"].as<int>(-180);
+    to_lon = settings["downscaled_flood_fraction"]["to_lon"].as<int>(180);
+    if (from_lat < -90 || from_lat > to_lat) {
+        throw std::runtime_error("invalid from_lat");
+    }
+    if (to_lat > 90) {
+        throw std::runtime_error("invalid to_lat");
+    }
+    if (from_lon < -180 || from_lon > to_lon) {
+        throw std::runtime_error("invalid from_lon");
+    }
+    if (to_lon > 180) {
+        throw std::runtime_error("invalid to_lon");
+    }
+    target_lon_count = (to_lon - from_lon) * reaggregate_factor;
+    target_lat_count = (to_lat - from_lat) * reaggregate_factor;
 }
 
 template<typename T>
@@ -180,17 +200,10 @@ void Downscaling<T>::run(pipeline::Pipeline* p) {
     const auto projection_times = p->consume<netCDF::DimVar<double>>("projection_times");
     netCDF::File flddph_file(flddph_filename, 'w');
     netCDF::File fldfrc_file(fldfrc_filename, 'w');
-    if (reaggregate_factor < 200) {
-        target_lon_count = 360 * reaggregate_factor;
-        target_lat_count = 180 * reaggregate_factor;
-    } else {
-        target_lon_count = fine_lon_count;
-        target_lat_count = fine_lat_count;
-    }
-    netCDF::NcVar flddph_var =
-        flddph_file.var<T>(flddph_varname, {flddph_file.dimvar(*projection_times), flddph_file.lat(target_lat_count), flddph_file.lon(target_lon_count)});
-    netCDF::NcVar fldfrc_var =
-        fldfrc_file.var<T>(fldfrc_varname, {fldfrc_file.dimvar(*projection_times), fldfrc_file.lat(target_lat_count), fldfrc_file.lon(target_lon_count)});
+    netCDF::NcVar flddph_var = flddph_file.var<T>(flddph_varname, {flddph_file.dimvar(*projection_times), flddph_file.lat(target_lat_count, from_lat, to_lat),
+                                                                   flddph_file.lon(target_lon_count, from_lon, to_lon)});
+    netCDF::NcVar fldfrc_var = fldfrc_file.var<T>(fldfrc_varname, {fldfrc_file.dimvar(*projection_times), fldfrc_file.lat(target_lat_count, from_lat, to_lat),
+                                                                   fldfrc_file.lon(target_lon_count, from_lon, to_lon)});
     downscale(*coarse_flddph, flddph_file, flddph_var, fldfrc_file, fldfrc_var);
     for (auto& area : areas) {
         area.grid.reset();
@@ -215,12 +228,16 @@ void Downscaling<T>::downscale(
             nvector::Vector<T, 2> fine_flddph(-9999.0, area.size.x, area.size.y);
             coarse_to_fine(area, coarse_flddph, &fine_flddph);
             fine_to_med(area, &fine_flddph, [&](std::size_t med_lat, std::size_t med_lon, T cell_dph, T dcell_dph) {
-                if (dcell_dph > 0) {
-                    T& tmp = flddph(med_lat, med_lon);
-                    tmp = std::max(tmp, cell_dph);
-                    ++fldfrc(med_lat, med_lon);
+                if (med_lat >= 200 * (90 + from_lat) && med_lat < 200 * (90 + to_lat) && med_lon >= 200 * (180 + from_lon) && med_lon < 200 * (180 + to_lon)) {
+                    med_lat = med_lat - (90 + from_lat);
+                    med_lon = med_lon - (180 + from_lon);
+                    if (dcell_dph > 0) {
+                        T& tmp = flddph(med_lat, med_lon);
+                        tmp = std::max(tmp, cell_dph);
+                        ++fldfrc(med_lat, med_lon);
+                    }
+                    ++fldnum(med_lat, med_lon);
                 }
-                ++fldnum(med_lat, med_lon);
             });
         }
         T* num = &fldnum.data()[0];
