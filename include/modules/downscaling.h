@@ -80,7 +80,7 @@ class Downscaling : public pipeline::Module {
     std::string flddph_varname;
     std::string fldfrc_filename;
     std::string fldfrc_varname;
-    std::size_t reaggregate_factor;
+    std::size_t inverse_target_cell_size;
     int from_lat, to_lat;
     int from_lon, to_lon;
 

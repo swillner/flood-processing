@@ -68,8 +68,10 @@ inline void Downscaling<T>::fine_to_med_dx_dy(
             dlon = fine_cell_size * dx;
             dlat = -fine_cell_size * dy;
         }
-        func(std::min(static_cast<std::size_t>(std::max((90. - *lat) * reaggregate_factor + dlat * reaggregate_factor / 3., 0.0)), target_lat_count - 1),
-             std::min(static_cast<std::size_t>(std::max((180. + *lon) * reaggregate_factor + dlon * reaggregate_factor / 3., 0.0)), target_lon_count - 1),
+        func(std::min(static_cast<std::size_t>(std::max((90. - *lat) * inverse_target_cell_size + dlat * inverse_target_cell_size / 3., 0.0)),
+                      target_lat_count - 1),
+             std::min(static_cast<std::size_t>(std::max((180. + *lon) * inverse_target_cell_size + dlon * inverse_target_cell_size / 3., 0.0)),
+                      target_lon_count - 1),
              *p_fine_flddph, *(p_fine_flddph + offset));
     }
 }
@@ -105,7 +107,7 @@ inline void Downscaling<T>::fine_to_med(Area& area, nvector::Vector<T, 2>* fine_
                     *lon = area.origin.lon + fine_cell_size * (x + 0.5);
                     *lat = area.origin.lat - fine_cell_size * (y + 0.5);
                 }
-                if (reaggregate_factor < 200) {
+                if (inverse_target_cell_size < 200) {
                     if (x > 0) {
                         if (y > 0) {
                             fine_to_med_dx_dy(area.size.x, area_has_lonlat, p_fine_flddph, lat, lon, -1, -1, std::forward<Function>(func));
@@ -154,15 +156,15 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
     fldfrc_filename = settings["downscaled_flood_fraction"]["filename"].as<std::string>();
     fldfrc_varname = settings["downscaled_flood_fraction"]["varname"].as<std::string>();
 
-    reaggregate_factor = settings["reaggregate_factor"].as<std::size_t>();
-    if (reaggregate_factor > 200) {
-        throw std::runtime_error("reaggregate_factor must be less than or equal 200");
+    inverse_target_cell_size = settings["inverse_target_cell_size"].as<std::size_t>();
+    if (inverse_target_cell_size > 200) {
+        throw std::runtime_error("inverse_target_cell_size must be less than or equal 200");
     }
-    if (reaggregate_factor < 200) {
-        if (reaggregate_factor % 3 != 0) {
-            throw std::runtime_error("reaggregate_factor must be 200 or a multiple of 3");
-        } else if (fine_lat_count % (reaggregate_factor / 3) != 0) {
-            throw std::runtime_error("invalid reaggregate_factor");
+    if (inverse_target_cell_size < 200) {
+        if (inverse_target_cell_size % 3 != 0) {
+            throw std::runtime_error("inverse_target_cell_size must be 200 or a multiple of 3");
+        } else if (fine_lat_count % (inverse_target_cell_size / 3) != 0) {
+            throw std::runtime_error("invalid inverse_target_cell_size");
         }
     }
 
@@ -182,8 +184,8 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
     if (to_lon > 180) {
         throw std::runtime_error("invalid to_lon");
     }
-    target_lon_count = (to_lon - from_lon) * reaggregate_factor;
-    target_lat_count = (to_lat - from_lat) * reaggregate_factor;
+    target_lon_count = (to_lon - from_lon) * inverse_target_cell_size;
+    target_lat_count = (to_lat - from_lat) * inverse_target_cell_size;
 }
 
 template<typename T>
