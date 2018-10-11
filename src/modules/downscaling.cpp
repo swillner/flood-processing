@@ -19,7 +19,7 @@
 
 #include "modules/downscaling.h"
 #include "FortranGrid.h"
-#include "ProgressBar.h"
+#include "progressbar.h"
 #include "netcdf/File.h"
 
 namespace flood_processing {
@@ -204,7 +204,7 @@ void Downscaling<T>::run(pipeline::Pipeline* p) {
 template<typename T>
 void Downscaling<T>::downscale(
     nvector::View<T, 3>& flddph, netCDF::File& result_flddph, netCDF::NcVar result_flddph_var, netCDF::File& result_fldfrc, netCDF::NcVar result_fldfrc_var) {
-    ProgressBar progress("Downscaling", flddph.template size<0>());
+    progressbar::ProgressBar progress(flddph.template size<0>(), "Downscaling");
     flddph.template split<false, true, true>().foreach_element([&](std::size_t index, const nvector::View<T, 2>& coarse_flddph) {
         nvector::Vector<T, 2> flddph(0, target_lat_count, target_lon_count);
         nvector::Vector<T, 2> fldfrc(0, target_lat_count, target_lon_count);
@@ -239,7 +239,7 @@ void Downscaling<T>::downscale(
         }
         result_flddph.set<T, 2>(result_flddph_var, flddph, index);
         result_fldfrc.set<T, 2>(result_fldfrc_var, fldfrc, index);
-        progress.tick();
+        ++progress;
         return true;
     });
 }

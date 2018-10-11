@@ -18,7 +18,7 @@
 */
 
 #include "modules/return_period_threshold.h"
-#include "ProgressBar.h"
+#include "progressbar.h"
 #include "nvector.h"
 
 namespace flood_processing {
@@ -37,7 +37,7 @@ void ReturnPeriodThreshold<T>::run(pipeline::Pipeline* p) {
         raster = p->consume<nvector::Vector<T, 2>>("raster");
     }
 
-    ProgressBar progress("Return period threshold", lat_count * lon_count);
+    progressbar::ProgressBar progress(lat_count * lon_count, "Return period threshold");
     nvector::foreach_split_parallel<nvector::Split<true, false, false>>(
         std::make_tuple(*return_periods, *return_levels, *return_levels_thresholded),
         [&](std::size_t lat, std::size_t lon, nvector::View<T, 1>& return_periods_l, nvector::View<T, 1>& return_levels_l,
@@ -58,7 +58,7 @@ void ReturnPeriodThreshold<T>::run(pipeline::Pipeline* p) {
                                           return true;
                                       });
             }
-            progress.tick();
+            ++progress;
         });
     p->provide<nvector::Vector<T, 3>>("return_levels_thresholded", return_levels_thresholded);
 }

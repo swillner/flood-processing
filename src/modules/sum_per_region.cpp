@@ -18,7 +18,7 @@
 */
 
 #include "modules/sum_per_region.h"
-#include "ProgressBar.h"
+#include "progressbar.h"
 #include "nvector.h"
 
 namespace flood_processing {
@@ -36,7 +36,7 @@ void SumPerRegion<T>::run(pipeline::Pipeline* p) {
         }
         const auto time_count = data->template size<0>();
         auto output = std::make_shared<nvector::Vector<T, 2>>(0, time_count, regions_count);
-        ProgressBar progress("Sum per region", time_count);
+        progressbar::ProgressBar progress(time_count, "Sum per region");
         data->template split<false, true, true>().foreach_parallel([&](std::size_t index, nvector::View<T, 2>& grid) {
             nvector::foreach_view(std::make_tuple(grid, *region_index_raster), [&](std::size_t lat, std::size_t lon, T d, T region_index_l) {
                 (void)lat;
@@ -46,7 +46,7 @@ void SumPerRegion<T>::run(pipeline::Pipeline* p) {
                 }
                 return true;
             });
-            progress.tick();
+            ++progress;
         });
         p->provide<nvector::Vector<T, 2>>(outputname, output);
     } else {
@@ -54,7 +54,7 @@ void SumPerRegion<T>::run(pipeline::Pipeline* p) {
         netCDF::NcVar var = file.var(varname);
         const auto time_count = file.size<0>(var);
         auto output = std::make_shared<nvector::Vector<T, 2>>(0, time_count, regions_count);
-        ProgressBar progress("Sum per region", time_count);
+        progressbar::ProgressBar progress(time_count, "Sum per region");
         const std::size_t lat_count = file.size<1>(var);
         const std::size_t lon_count = file.size<2>(var);
         if (lat_count != region_index_raster->template size<0>() || lon_count != region_index_raster->template size<1>()) {
@@ -71,7 +71,7 @@ void SumPerRegion<T>::run(pipeline::Pipeline* p) {
                 }
                 return true;
             });
-            progress.tick();
+            ++progress;
         }
         p->provide<nvector::Vector<T, 2>>(outputname, output);
     }

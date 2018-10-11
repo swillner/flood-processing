@@ -20,7 +20,7 @@
 #include "modules/rasterization.h"
 #include <algorithm>
 #include <vector>
-#include "ProgressBar.h"
+#include "progressbar.h"
 #ifdef FLOOD_PROCESSING_WITH_GDAL
 #include <gdal_alg.h>
 #include <gdal_priv.h>
@@ -89,7 +89,7 @@ static T most_common(std::vector<T>& vec) {
 #ifdef FLOOD_PROCESSING_WITH_GDAL
 template<typename T>
 inline void Rasterization<T>::combine_fine(const nvector::View<T, 2>& fine_raster, nvector::View<T, 2>& raster) {
-    ProgressBar progress("Combining", raster.template size<0>() * raster.template size<1>());
+    progressbar::ProgressBar progress(raster.template size<0>() * raster.template size<1>(), "Combining");
     raster.foreach_parallel([&](std::size_t lat, std::size_t lon, T& n) {
         std::vector<T> inner;
         inner.reserve(adjust_scale * adjust_scale);
@@ -106,7 +106,7 @@ inline void Rasterization<T>::combine_fine(const nvector::View<T, 2>& fine_raste
         } else {
             n = most_common(inner);
         }
-        progress.tick();
+        ++progress;
     });
 }
 #endif
@@ -114,7 +114,7 @@ inline void Rasterization<T>::combine_fine(const nvector::View<T, 2>& fine_raste
 #ifdef FLOOD_PROCESSING_WITH_GDAL
 template<typename T>
 inline void Rasterization<T>::advance(nvector::View<T, 2>& result, std::size_t max_advance) {
-    ProgressBar progress("Advancing", max_advance);
+    progressbar::ProgressBar progress(max_advance, "Advancing");
     nvector::Vector<T, 2> last(0, result.template size<0>(), result.template size<1>());
     for (std::size_t i = 0; i < max_advance; ++i) {
         std::copy(std::begin(result), std::end(result), std::begin(last));
@@ -156,7 +156,7 @@ inline void Rasterization<T>::advance(nvector::View<T, 2>& result, std::size_t m
         if (!found) {
             break;
         }
-        progress.tick();
+        ++progress;
     }
 }
 #endif
@@ -196,7 +196,7 @@ inline void Rasterization<T>::rasterize(nvector::View<T, 2>& result, Function&& 
 
     std::vector<double> data(lat_count * lon_count, std::numeric_limits<double>::quiet_NaN());
     const std::size_t size = inlayer->GetFeatureCount();
-    ProgressBar progress("Rasterizing", size);
+    progressbar::ProgressBar progress(size, "Rasterizing");
     inlayer->ResetReading();
 #pragma omp parallel for default(shared) schedule(dynamic)
     for (std::size_t i = 0; i < size; ++i) {
@@ -220,7 +220,7 @@ inline void Rasterization<T>::rasterize(nvector::View<T, 2>& result, Function&& 
                                transform                                                          // void *pTransformArg
         );
         OGRFeature::DestroyFeature(infeature);
-        progress.tick();
+        ++progress;
     }
     GDALClose(infile);
 

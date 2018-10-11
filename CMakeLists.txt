@@ -28,7 +28,7 @@ project(flood_processing)
 file(GLOB MODULE_SOURCES src/modules/*.cpp)
 add_executable(flood_processing src/main.cpp ${MODULE_SOURCES})
 
-target_include_directories(flood_processing PRIVATE include lib/lmoments/include)
+target_include_directories(flood_processing PRIVATE include lib/lmoments/include lib/cpp-library)
 target_compile_options(flood_processing PRIVATE -std=c++11)
 
 set_advanced_cpp_warnings(flood_processing)
@@ -41,12 +41,6 @@ if(PARALLELIZATION)
   find_package(OpenMP REQUIRED)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-endif()
-
-option(WITH_TQDM "" ON)
-if(WITH_TQDM)
-  target_compile_definitions(flood_processing PRIVATE FLOOD_PROCESSING_WITH_TQDM)
-  target_include_directories(flood_processing PRIVATE lib/tqdm.cpp/include)
 endif()
 
 include_netcdf_cxx4(flood_processing ON v4.3.0)
