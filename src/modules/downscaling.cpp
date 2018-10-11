@@ -168,10 +168,10 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
         }
     }
 
-    from_lat = settings["downscaled_flood_fraction"]["from_lat"].as<int>(-90);
-    to_lat = settings["downscaled_flood_fraction"]["to_lat"].as<int>(90);
-    from_lon = settings["downscaled_flood_fraction"]["from_lon"].as<int>(-180);
-    to_lon = settings["downscaled_flood_fraction"]["to_lon"].as<int>(180);
+    from_lat = settings["from_lat"].as<int>(-90);
+    to_lat = settings["to_lat"].as<int>(90);
+    from_lon = settings["from_lon"].as<int>(-180);
+    to_lon = settings["to_lon"].as<int>(180);
     if (from_lat < -90 || from_lat > to_lat) {
         throw std::runtime_error("invalid from_lat");
     }
