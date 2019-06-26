@@ -28,12 +28,17 @@ namespace modules {
 
 template<typename T>
 class ReturnLevelLookup : public pipeline::Module {
+  protected:
+    std::string return_periods_name;
+
   public:
-    ReturnLevelLookup(const settings::SettingsNode& settings) { (void)settings; }
+    ReturnLevelLookup(const settings::SettingsNode& settings) {
+        return_periods_name = settings["input"]["return_periods"].as<std::string>();
+    }
     void run(pipeline::Pipeline* p) override;
 
     inline pipeline::ModuleDescription describe() override {
-        return pipeline::ModuleDescription{"return_level_lookup", {"return_periods", "return_levels_mapping", "return_periods_mapping"}, {"return_levels"}};
+        return pipeline::ModuleDescription{"return_level_lookup", {return_periods_name, "return_levels_mapping", "return_periods_mapping"}, {"return_levels"}};
     }
 };
 

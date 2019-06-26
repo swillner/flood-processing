@@ -18,15 +18,15 @@
 */
 
 #include "modules/return_level_lookup.h"
-#include "progressbar.h"
 #include "nvector.h"
+#include "progressbar.h"
 
 namespace flood_processing {
 namespace modules {
 
 template<typename T>
 void ReturnLevelLookup<T>::run(pipeline::Pipeline* p) {
-    const auto return_periods = p->consume<nvector::Vector<T, 3>>("return_periods");
+    const auto return_periods = p->consume<nvector::Vector<T, 3>>(return_periods_name);
     const auto return_levels_mapping = p->consume<nvector::Vector<T, 3>>("return_levels_mapping");
     const auto return_periods_mapping = p->consume<std::vector<double>>("return_periods_mapping");
     const auto lat_count = return_periods->template size<1>();

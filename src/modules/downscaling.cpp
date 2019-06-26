@@ -156,6 +156,14 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
     fldfrc_filename = settings["downscaled_flood_fraction"]["filename"].as<std::string>();
     fldfrc_varname = settings["downscaled_flood_fraction"]["varname"].as<std::string>();
 
+    if (settings.has("input")) {
+        projection_times_name = settings["input"]["times"].as<std::string>("projection_times");
+        return_levels_name = settings["input"]["return_levels"].as<std::string>("return_levels");
+    } else {
+        projection_times_name = "projection_times";
+        return_levels_name = "return_levels";
+    }
+
     inverse_target_cell_size = settings["inverse_target_cell_size"].as<std::size_t>();
     if (inverse_target_cell_size > 200 || inverse_target_cell_size == 0) {
         throw std::runtime_error("inverse_target_cell_size must be less than or equal 200");
@@ -198,8 +206,8 @@ void Downscaling<T>::run(pipeline::Pipeline* p) {
             area.lonlat.reset(new FortranGrid<float>(name + ".lonlat", 2 * area.size.x, area.size.y, 'r'));
         }
     }
-    auto coarse_flddph = p->consume<nvector::View<T, 3>>("return_levels_thresholded");
-    const auto projection_times = p->consume<netCDF::DimVar<double>>("projection_times");
+    auto coarse_flddph = p->consume<nvector::View<T, 3>>(return_levels_name);
+    const auto projection_times = p->consume<netCDF::DimVar<double>>(projection_times_name);
     netCDF::File flddph_file(flddph_filename, 'w');
     netCDF::File fldfrc_file(fldfrc_filename, 'w');
     netCDF::NcVar flddph_var = flddph_file.var<T>(flddph_varname, {flddph_file.dimvar(*projection_times), flddph_file.lat(target_lat_count, from_lat, to_lat),

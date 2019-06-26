@@ -81,6 +81,8 @@ class Downscaling : public pipeline::Module {
     std::string fldfrc_filename;
     std::string fldfrc_varname;
     std::size_t inverse_target_cell_size;
+    std::string projection_times_name;
+    std::string return_levels_name;
     int from_lat, to_lat;
     int from_lon, to_lon;
 
@@ -100,7 +102,7 @@ class Downscaling : public pipeline::Module {
     void run(pipeline::Pipeline* p) override;
 
     inline pipeline::ModuleDescription describe() override {
-        return pipeline::ModuleDescription{"downscaling", {"projection_times", "return_levels_thresholded"}, {}};
+        return pipeline::ModuleDescription{"downscaling", {projection_times_name, return_levels_name}, {}};
     }
 };
 
