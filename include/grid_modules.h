@@ -18,6 +18,8 @@
 #ifndef GRID_MODULES_H
 #define GRID_MODULES_H
 
+#include <fstream>
+#include <stdexcept>
 #include <vector>
 #include "netcdf/File.h"
 #include "nvector.h"
@@ -25,6 +27,13 @@
 #include "settingsnode.h"
 
 namespace pipeline {
+
+void check_file_exists(const std::string& filename) {
+    std::ifstream infile(filename);
+    if (!infile.good()) {
+        throw std::runtime_error(filename + " not found");
+    }
+}
 
 class ArrayReaderModule : public pipeline::Module {
   protected:
@@ -38,9 +47,10 @@ class ArrayReaderModule : public pipeline::Module {
         filename = settings["filename"].as<std::string>();
         varname = settings["varname"].as<std::string>();
         outputname = settings["output"].as<std::string>();
-        type_name = settings["type"].as<std::string>("string");
+        type_name = settings["type"].as<std::string>();
     }
     void run(pipeline::Pipeline* p) override {
+        check_file_exists(filename);
         netCDF::File file(filename, 'r');
         if (type_name == "string") {
             const auto data = file.get<const char*>(varname);
@@ -50,6 +60,14 @@ class ArrayReaderModule : public pipeline::Module {
                 result->push_back(d);
             }
             p->provide<std::vector<std::string>>(outputname, result);
+        } else if (type_name == "double") {
+            const auto data = file.get<double>(varname);
+            auto result = std::make_shared<std::vector<double>>();
+            result->reserve(data.size());
+            for (const auto& d : data) {
+                result->push_back(d);
+            }
+            p->provide<std::vector<double>>(outputname, result);
         }
     }
     inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"array_reader", {}, {outputname}}; }
@@ -69,6 +87,7 @@ class GridReader2dModule : public pipeline::Module {
         outputname = settings["output"].as<std::string>();
     }
     void run(pipeline::Pipeline* p) override {
+        check_file_exists(filename);
         netCDF::File file(filename, 'r');
         p->provide<nvector::Vector<T, 2>>(outputname, std::make_shared<nvector::Vector<T, 2>>(file.get<T, 2>(varname)));
     }
@@ -91,6 +110,7 @@ class GridReader3dModule : public pipeline::Module {
         outputdim1name = settings["output"]["dim1"].as<std::string>("");
     }
     void run(pipeline::Pipeline* p) override {
+        check_file_exists(filename);
         netCDF::File file(filename, 'r');
         if (!outputgridsname.empty()) {
             auto grids = std::make_shared<nvector::Vector<T, 3>>(file.get<T, 3>(varname));
