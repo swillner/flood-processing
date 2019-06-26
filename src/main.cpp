@@ -24,9 +24,9 @@
 #include "modules/downscaling.h"
 #include "modules/rasterization.h"
 #include "modules/return_level_lookup.h"
-#include "modules/return_period_threshold.h"
 #include "modules/return_periods.h"
 #include "modules/sum_per_region.h"
+#include "modules/threshold_mask.h"
 #include "nvector.h"
 #include "pipeline.h"
 #include "settingsnode.h"
@@ -69,8 +69,8 @@ static void run(const settings::SettingsNode& settings) {
             case settings::hstring::hash("return_level_lookup"):
                 p.register_module(new flood_processing::modules::ReturnLevelLookup<T>(m));
                 break;
-            case settings::hstring::hash("return_period_threshold"):
-                p.register_module(new flood_processing::modules::ReturnPeriodThreshold<T>(m));
+            case settings::hstring::hash("threshold_mask"):
+                p.register_module(new flood_processing::modules::ThresholdMask<T>(m));
                 break;
             case settings::hstring::hash("rasterization"):
                 p.register_module(new flood_processing::modules::Rasterization<T>(m));
