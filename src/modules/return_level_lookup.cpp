@@ -44,14 +44,26 @@ void ReturnLevelLookup<T>::run(pipeline::Pipeline* p) {
                     (void)t;
                     std::size_t i;
                     for (i = 0; i < return_periods_mapping->size(); ++i) {
-                        if (return_period <= (*return_periods_mapping)[i]) {
+                        if (return_period < (*return_periods_mapping)[i]) {
                             break;
                         }
                     }
-                    if (i == 0) {
-                        return_level = 0;
+                    if (interpolate) {
+                        if (i == 0) {
+                            T part = return_period / (*return_periods_mapping)[i];
+                            return_level = part * return_levels_mapping_l(i);
+                        } else if (i < return_periods_mapping->size()) {
+                            T part = (return_period - (*return_periods_mapping)[i - 1]) / ((*return_periods_mapping)[i] - (*return_periods_mapping)[i - 1]);
+                            return_level = part * return_levels_mapping_l(i) + (1 - part) * return_levels_mapping_l(i - 1);
+                        } else {
+                            return_level = return_levels_mapping_l(i - 1);
+                        }
                     } else {
-                        return_level = return_levels_mapping_l(i - 1);
+                        if (i == 0) {
+                            return_level = 0;
+                        } else {
+                            return_level = return_levels_mapping_l(i - 1);
+                        }
                     }
                     return true;
                 });

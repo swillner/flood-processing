@@ -29,10 +29,12 @@ namespace modules {
 template<typename T>
 class ReturnLevelLookup : public pipeline::Module {
   protected:
+    bool interpolate;
     std::string return_periods_name;
 
   public:
     ReturnLevelLookup(const settings::SettingsNode& settings) {
+        interpolate = settings["interpolate"].as<bool>();
         return_periods_name = settings["input"]["return_periods"].as<std::string>();
     }
     void run(pipeline::Pipeline* p) override;
