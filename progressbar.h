@@ -35,8 +35,6 @@
 #include <sys/ioctl.h>
 #endif
 
-#define PROGRESSBAR_TERMINAL_CLEAR_TO_EOL "\x1b[K"
-
 namespace progressbar {
 
 class ProgressBar {
@@ -45,6 +43,7 @@ class ProgressBar {
     std::vector<char> buf;
     bool is_tty;
     bool closed = false;
+    bool subbar;
     std::mutex mutex_m;
     std::atomic<std::size_t> current;
     std::size_t reprint_next = 1;
@@ -57,13 +56,15 @@ class ProgressBar {
     std::FILE* out;
 
     void update(std::size_t n) noexcept {
-        current += n;
+#ifndef PROGRESSBAR_SILENT
+        current = std::min(current + n, total);
         if (current >= reprint_next) {
             std::lock_guard<std::mutex> guard(mutex_m);
             if (!closed) {
                 recalc_and_print();
             }
         }
+#endif
     }
 
     void recalc_and_print(bool force = false) noexcept {
@@ -220,16 +221,21 @@ class ProgressBar {
         }
         print_to_buf(freq, runtime, etr, etr_known);
         if (is_tty) {
-            fputc('\r', out);
+            fputc(GO_TO_BOL, out);
         }
         fputs(&buf[0], out);
         if (!is_tty) {
-            fputc('\n', out);
+            fputc(ENDL, out);
         }
         fflush(out);
     }
 
   public:
+    static constexpr const char ENDL = '\n';
+    static constexpr const char GO_TO_BOL = '\r';
+    static constexpr const char* CLEAR_TO_EOL = "\x1b[K";
+    static constexpr const char* GO_UP = "\x1b[F";
+
     const std::size_t total;
     std::string description;
     float smoothing = 0.75;
@@ -239,10 +245,12 @@ class ProgressBar {
     char bar_cur = '>';
     char bar_left = ' ';
 
-    ProgressBar(std::size_t total_p, std::string description_p = "", std::FILE* out_p = stdout, std::size_t min_reprint_time_ms = 100) noexcept
+    ProgressBar(
+        std::size_t total_p, std::string description_p = "", bool subbar_p = false, std::FILE* out_p = stdout, std::size_t min_reprint_time_ms = 100) noexcept
         : min_reprint_time(std::chrono::steady_clock::duration(std::chrono::milliseconds(min_reprint_time_ms)).count()),
           out(out_p),
           total(total_p),
+          subbar(subbar_p),
           description(std::move(description_p)) {
         std::lock_guard<std::mutex> guard(mutex_m);
         start_time = std::chrono::steady_clock::now();
@@ -253,7 +261,12 @@ class ProgressBar {
         if (!is_tty) {
             buf.resize(65);
         }
+#ifndef PROGRESSBAR_SILENT
+        if (subbar) {
+            fputc(ENDL, out);
+        }
         print_bar(0, 0, 0, false);
+#endif
     }
     ~ProgressBar() noexcept { close(); }
 
@@ -280,28 +293,38 @@ class ProgressBar {
         eta_from_time = std::chrono::steady_clock::now();
     }
 
-    void close() noexcept {
+    void close(bool remove = false) noexcept {
         std::lock_guard<std::mutex> guard(mutex_m);
         if (!closed) {
             auto total_duration = (std::chrono::steady_clock::now() - start_time).count();
             auto freq = current * std::chrono::steady_clock::period::den / static_cast<float>(total_duration * std::chrono::steady_clock::period::num);
             current = total;
-            print_bar(freq, total_duration, 0, true);
-            if (is_tty) {
-                fputc('\n', out);
+#ifndef PROGRESSBAR_SILENT
+            if (remove && is_tty) {
+                fputc(GO_TO_BOL, out);
+                fputs(CLEAR_TO_EOL, out);
+                if (subbar) {
+                    fputs(GO_UP, out);
+                }
+            } else {
+                print_bar(freq, total_duration, 0, true);
+                if (is_tty) {
+                    fputc(ENDL, out);
+                }
             }
+#endif
             closed = true;
         }
     }
 
-    void println(const std::string& s) noexcept {
+    void println(const std::string& s = "") noexcept {
         std::lock_guard<std::mutex> guard(mutex_m);
         if (is_tty && !closed) {
-            fputc('\r', out);
-            fputs(PROGRESSBAR_TERMINAL_CLEAR_TO_EOL, out);
+            fputc(GO_TO_BOL, out);
+            fputs(CLEAR_TO_EOL, out);
         }
         fputs(s.c_str(), out);
-        fputc('\n', out);
+        fputc(ENDL, out);
         if (!closed) {
             recalc_and_print(true);
         }
