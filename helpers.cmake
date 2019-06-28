@@ -46,15 +46,49 @@ function(set_default_build_type BUILD_TYPE)
     cmake_policy(SET CMP0069 NEW) # for INTERPROCEDURAL_OPTIMIZATION
   endif()
   if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE ${BUILD_TYPE} CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
+    set(CMAKE_BUILD_TYPE ${BUILD_TYPE} CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel Profile." FORCE)
   endif()
-  set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS} -pg")
-  set(CMAKE_EXE_LINKER_FLAGS_PROFILE "${CMAKE_EXE_LINKER_FLAGS} -pg")
+  set(CMAKE_CXX_FLAGS_PROFILE
+    "-pg"
+    CACHE STRING "Flags used by the compiler during profile builds."
+    FORCE)
+  set(CMAKE_C_FLAGS_PROFILE
+    "-pg"
+    CACHE STRING "Flags used by the compiler during profile builds."
+    FORCE)
+  set(CMAKE_EXE_LINKER_FLAGS_PROFILE
+    "-pg"
+    CACHE STRING "Flags used by the linker during profile builds."
+    FORCE)
+  set(CMAKE_Fortran_FLAGS_PROFILE
+    "-pg"
+    CACHE STRING "Flags used by the compiler during profile builds."
+    FORCE)
+  set(CMAKE_MODULE_LINKER_FLAGS_PROFILE
+    "-pg"
+    CACHE STRING "Flags used by the linker during profile builds."
+    FORCE)
+  set(CMAKE_SHARED_LINKER_FLAGS_PROFILE
+    "-pg"
+    CACHE STRING "Flags used by the linker during profile builds."
+    FORCE)
+  set(CMAKE_STATIC_LINKER_FLAGS_PROFILE
+    "-pg"
+    CACHE STRING "Flags used by the linker during profile builds."
+    FORCE)
+  mark_as_advanced(
+    CMAKE_CXX_FLAGS_PROFILE
+    CMAKE_C_FLAGS_PROFILE
+    CMAKE_EXE_LINKER_FLAGS_PROFILE
+    CMAKE_Fortran_FLAGS_PROFILE
+    CMAKE_MODULE_LINKER_FLAGS_PROFILE
+    CMAKE_SHARED_LINKER_FLAGS_PROFILE
+    CMAKE_STATIC_LINKER_FLAGS_PROFILE)
 endfunction()
 
 
 function(set_build_type_specifics TARGET)
-  if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
+  if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel" OR CMAKE_BUILD_TYPE STREQUAL "Profile")
     if(${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION} GREATER 3.8)
       message(STATUS "Enabling interprocedural optimization")
       set_property(TARGET ${TARGET} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
@@ -247,9 +281,6 @@ function(add_cpp_tools TARGET)
     NAME ${TARGET}_cppclean
     COMMAND cppclean
     ARGUMENTS INCLUDES SOURCEFILE)
-  #if(TARGET ${TARGET}_cppclean)
-  #  set(CPP_TARGETS ${CPP_TARGETS} ${TARGET}_cppclean)
-  #endif()
 
   add_on_source(${TARGET}
     NAME ${TARGET}_vera
