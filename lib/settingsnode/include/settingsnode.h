@@ -18,10 +18,13 @@
 #ifndef SETTINGSNODE_H
 #define SETTINGSNODE_H
 
+#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
+#include <vector>
 #include "settingsnode/inner.h"
 
 namespace settings {
@@ -192,6 +195,14 @@ class SettingsNode {
         const auto& it = inner->as_map();
         return Map(it.first, it.second, path);
     }
+    template<typename T>
+    std::unordered_map<std::string, T> to_map() const {
+        const auto map = as_map();
+        std::unordered_map<std::string, T> res;
+        std::transform(std::begin(map), std::end(map), std::inserter(res, std::end(res)),
+                       [](const std::pair<std::string, SettingsNode> p) { return std::make_pair(p.first, p.second.as<T>()); });
+        return res;
+    }
     SettingsNode::Sequence as_sequence() const {
         check();
         if (!inner->is_sequence()) {
@@ -199,6 +210,13 @@ class SettingsNode {
         }
         const auto& it = inner->as_sequence();
         return Sequence(it.first, it.second, path);
+    }
+    template<typename T>
+    std::vector<T> to_vector() const {
+        const auto sequence = as_sequence();
+        std::vector<T> res;
+        std::transform(std::begin(sequence), std::end(sequence), std::back_inserter(res), [](const SettingsNode n) { return n.as<T>(); });
+        return res;
     }
 
     inline SettingsNode operator[](const char* key) const {
