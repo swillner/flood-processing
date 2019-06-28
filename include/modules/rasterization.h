@@ -21,6 +21,8 @@
 #define FLOOD_PROCESSING_RASTERIZE_H
 
 #include <string>
+#include <unordered_map>
+#include <vector>
 #include "nvector.h"
 #include "pipeline.h"
 #include "settingsnode.h"
@@ -33,7 +35,7 @@ class Rasterization : public pipeline::Module {
   protected:
     std::string resolution_mask_name;
     std::string shapefilename;
-    std::string layername;
+    std::vector<std::string> layernames;
     std::string fieldname;
     std::size_t max_advance;
     std::size_t adjust_scale;
@@ -71,10 +73,12 @@ class RegionIndexRasterization : public Rasterization<T> {
     using Rasterization<T>::invalid_value;
     using Rasterization<T>::xres;
     using Rasterization<T>::yres;
-    std::string altfieldname;
+    std::vector<std::string> fieldnames;
+    std::unordered_map<std::string, std::string> correction_map;
+    std::unordered_map<std::string, std::string> iso3_to_iso2;
 
   public:
-    RegionIndexRasterization(const settings::SettingsNode& settings) : Rasterization<T>(settings) { altfieldname = settings["altfield"].as<std::string>(""); };
+    RegionIndexRasterization(const settings::SettingsNode& settings);
     void run(pipeline::Pipeline* p) override;
 
     inline pipeline::ModuleDescription describe() override {

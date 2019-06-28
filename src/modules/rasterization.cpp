@@ -19,6 +19,7 @@
 
 #include "modules/rasterization.h"
 #include <algorithm>
+#include <fstream>
 #include <vector>
 #include "progressbar.h"
 #ifdef FLOOD_PROCESSING_WITH_GDAL
@@ -30,6 +31,9 @@
 #include "../src/gdal/gdalrasterize.cpp"
 #include "../src/gdal/llrasterize.cpp"
 #endif
+#include "settingsnode.h"
+#include "settingsnode/inner.h"
+#include "settingsnode/yaml.h"
 
 namespace flood_processing {
 namespace modules {
@@ -42,8 +46,14 @@ Rasterization<T>::Rasterization(const settings::SettingsNode& settings) {
         yres = settings["yres"].as<std::size_t>();
     }
     shapefilename = settings["shapefile"].as<std::string>();
-    layername = settings["layer"].as<std::string>();
-    fieldname = settings["field"].as<std::string>();
+    if (settings.has("layer")) {
+        layernames = {settings["layer"].as<std::string>()};
+    } else {
+        layernames = settings["layers"].to_vector<std::string>();
+    }
+    if (!settings.has("fields")) {
+        fieldname = settings["field"].as<std::string>();
+    }
     max_advance = settings["advance"].as<std::size_t>(0);
     adjust_scale = settings["adjust_scale"].as<std::size_t>(1);
     adjust_max = settings["adjust_max"].as<bool>(false);
@@ -165,66 +175,77 @@ inline void Rasterization<T>::advance(nvector::View<T, 2>& result, std::size_t m
 template<typename T>
 template<typename Function>
 inline void Rasterization<T>::rasterize(nvector::View<T, 2>& result, Function&& func) {
-    auto infile = static_cast<GDALDataset*>(GDALOpenEx(shapefilename.c_str(), GDAL_OF_VECTOR, nullptr, nullptr, nullptr));
-    if (!infile) {
-        throw std::runtime_error("could not open shape file");
-    }
-    OGRLayer* inlayer = infile->GetLayerByName(layername.c_str());
-    if (!inlayer) {
-        throw std::runtime_error("could not read layer from shape file");
-    }
-
     const std::size_t lat_count = result.template size<0>();
     const std::size_t lon_count = result.template size<1>();
     double geotransform[] = {-180., 360. / lon_count, 0, 90., 0, -180. / lat_count};
     // this is how geotransform is used by gdal:
     //   *pdfGeoX = padfGeoTransform[0] + dfPixel * padfGeoTransform[1] - dfLine * padfGeoTransform[2];
     //   *pdfGeoY = padfGeoTransform[3] + dfPixel * padfGeoTransform[4] - dfLine * padfGeoTransform[5];
-
-    void* transform;
-    {
-        char* projection = nullptr;
-        OGRSpatialReference* spatial_reference = inlayer->GetSpatialRef();
-        if (!spatial_reference) {
-            throw std::runtime_error("could not get spatial reference");
-        } else {
-            spatial_reference->exportToWkt(&projection);
-        }
-        transform = GDALCreateGenImgProjTransformer3(projection, nullptr, nullptr, geotransform);
-        CPLFree(projection);
-    }
-
     std::vector<double> data(lat_count * lon_count, std::numeric_limits<double>::quiet_NaN());
-    const std::size_t size = inlayer->GetFeatureCount();
-    progressbar::ProgressBar progress(size, "Rasterizing");
-    inlayer->ResetReading();
-#pragma omp parallel for default(shared) schedule(dynamic)
-    for (std::size_t i = 0; i < size; ++i) {
-        OGRFeature* infeature;
-#pragma omp critical(infeature)
-        { infeature = inlayer->GetNextFeature(); }
-        OGRGeometry* geometry = infeature->GetGeometryRef();  //->SimplifyPreserveTopology(pixel_size / 16);
-        double value = func(infeature, i);
-        gv_rasterize_one_shape(static_cast<unsigned char*>(static_cast<void*>(&data.data()[0])),  // unsigned char *pabyChunkBuf,
-                               0,                                                                 // int nYOff,
-                               lon_count,                                                         // int nXSize,
-                               lat_count,                                                         // int nYSize,
-                               1,                                                                 // int nBands,
-                               GDT_Float64,                                                       // GDALDataType eType,
-                               0,                                                                 // int bAllTouched,
-                               geometry,                                                          // OGRGeometry *poShape,
-                               &value,                                                            // double *padfBurnValue,
-                               GBV_UserBurnValue,                                                 // GDALBurnValueSrc eBurnValueSrc,
-                               GRMA_Replace,                                                      // GDALRasterMergeAlg eMergeAlg,
-                               GDALGenImgProjTransform,                                           // GDALTransformerFunc pfnTransformer,
-                               transform                                                          // void *pTransformArg
-        );
-        OGRFeature::DestroyFeature(infeature);
-        ++progress;
-    }
-    GDALClose(infile);
 
-    GDALDestroyTransformer(transform);
+    auto infile = static_cast<GDALDataset*>(GDALOpenEx(shapefilename.c_str(), GDAL_OF_VECTOR, nullptr, nullptr, nullptr));
+    if (!infile) {
+        throw std::runtime_error("could not open shape file");
+    }
+
+    progressbar::ProgressBar layers_bar(layernames.size(), "Layers");
+    for (const auto& layername : layernames) {
+        OGRLayer* inlayer = infile->GetLayerByName(layername.c_str());
+        if (!inlayer) {
+            throw std::runtime_error("could not read layer from shape file");
+        }
+
+        void* transform;
+        {
+            char* projection = nullptr;
+            OGRSpatialReference* spatial_reference = inlayer->GetSpatialRef();
+            if (!spatial_reference) {
+                throw std::runtime_error("could not get spatial reference");
+            } else {
+                spatial_reference->exportToWkt(&projection);
+            }
+            transform = GDALCreateGenImgProjTransformer3(projection, nullptr, nullptr, geotransform);
+            CPLFree(projection);
+        }
+
+        const std::size_t size = inlayer->GetFeatureCount();
+        progressbar::ProgressBar progress(size, "Rasterizing", true);
+        inlayer->ResetReading();
+#pragma omp parallel for default(shared) schedule(dynamic)
+        for (std::size_t i = 0; i < size; ++i) {
+            OGRFeature* infeature;
+#pragma omp critical(infeature)
+            { infeature = inlayer->GetNextFeature(); }
+            double value = func(infeature, i);
+            if (!std::isnan(value)) {
+                OGRGeometry* geometry = infeature->GetGeometryRef();                                      //->SimplifyPreserveTopology(pixel_size / 16);
+                gv_rasterize_one_shape(static_cast<unsigned char*>(static_cast<void*>(&data.data()[0])),  // unsigned char *pabyChunkBuf,
+                                       0,                                                                 // int nYOff,
+                                       lon_count,                                                         // int nXSize,
+                                       lat_count,                                                         // int nYSize,
+                                       1,                                                                 // int nBands,
+                                       GDT_Float64,                                                       // GDALDataType eType,
+                                       0,                                                                 // int bAllTouched,
+                                       geometry,                                                          // OGRGeometry *poShape,
+                                       &value,                                                            // double *padfBurnValue,
+                                       GBV_UserBurnValue,                                                 // GDALBurnValueSrc eBurnValueSrc,
+                                       GRMA_Replace,                                                      // GDALRasterMergeAlg eMergeAlg,
+                                       GDALGenImgProjTransform,                                           // GDALTransformerFunc pfnTransformer,
+                                       transform                                                          // void *pTransformArg
+                );
+            }
+            OGRFeature::DestroyFeature(infeature);
+            ++progress;
+        }
+        progress.close(true);
+
+        GDALDestroyTransformer(transform);
+
+        ++layers_bar;
+    }
+    layers_bar.close();
+
+    GDALClose(infile);
 
     std::move(std::begin(data), std::end(data), std::begin(result));
 }
@@ -269,6 +290,19 @@ void Rasterization<T>::run(pipeline::Pipeline* p) {
 }
 
 template<typename T>
+RegionIndexRasterization<T>::RegionIndexRasterization(const settings::SettingsNode& settings) : Rasterization<T>(settings) {
+    fieldnames = settings["fields"].to_vector<std::string>();
+    const auto filename = settings["mapping"].as<std::string>();
+    std::ifstream mapping_file(filename);
+    if (!mapping_file) {
+        throw std::runtime_error("Cannot open " + filename);
+    }
+    settings::SettingsNode mapping(std::unique_ptr<settings::YAML>(new settings::YAML(mapping_file)));
+    correction_map = mapping["correction_map"].to_map<std::string>();
+    iso3_to_iso2 = mapping["iso3_to_iso2"].to_map<std::string>();
+}
+
+template<typename T>
 void RegionIndexRasterization<T>::run(pipeline::Pipeline* p) {
 #ifdef FLOOD_PROCESSING_WITH_GDAL
     const auto regions = p->consume<std::vector<std::string>>("regions");
@@ -278,26 +312,45 @@ void RegionIndexRasterization<T>::run(pipeline::Pipeline* p) {
         yres = resolution_mask->template size<1>();
     }
     auto raster = std::make_shared<nvector::Vector<T, 2>>(std::numeric_limits<T>::quiet_NaN(), xres, yres);
+    std::vector<bool> region_found(regions->size(), false);
     rasterize(*raster, [&](OGRFeature* feature, std::size_t index) {
         (void)index;
-        const auto& id = feature->GetFieldAsString(this->fieldname.c_str());
+        std::string id = "";
+        for (const auto& fieldname_l : this->fieldnames) {
+            auto field_index = feature->GetFieldIndex(fieldname_l.c_str());
+            if (field_index >= 0) {
+                auto id_str = feature->GetFieldAsString(field_index);
+                id = id_str;
+                const auto& corrected = correction_map.find(id);
+                if (corrected != std::end(correction_map)) {
+                    id = corrected->second;
+                }
+                break;
+            }
+        }
+        if (id.empty()) {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
         const auto& r = std::find(regions->begin(), regions->end(), id);
         if (r == regions->end()) {
-            if (!altfieldname.empty()) {
-                const auto& id2 = feature->GetFieldAsString(altfieldname.c_str());
-                const auto& r2 = std::find(regions->begin(), regions->end(), id2);
-                if (r2 == regions->end()) {
-                    return std::numeric_limits<double>::quiet_NaN();
-                } else {
-                    return static_cast<double>(std::distance(regions->begin(), r2));
-                }
-            } else {
-                return std::numeric_limits<double>::quiet_NaN();
-            }
-        } else {
-            return static_cast<double>(std::distance(regions->begin(), r));
+            return std::numeric_limits<double>::quiet_NaN();
         }
+        region_found[r - regions->begin()] = true;
+        return static_cast<double>(std::distance(regions->begin(), r));
     });
+    bool found = false;
+    for (int i = 0; i < regions->size(); ++i) {
+        if (!region_found[i]) {
+            if (!found) {
+                std::cout << "\n";
+                found = true;
+            }
+            std::cout << "Warning: " << regions->at(i) << " not found in raster\n";
+        }
+    }
+    if (found) {
+        std::cout << std::endl;
+    }
     if (max_advance > 0) {
         advance(*raster, max_advance);
     }
