@@ -54,19 +54,11 @@ class ArrayReaderModule : public pipeline::Module {
         netCDF::File file(filename, 'r');
         if (type_name == "string") {
             const auto data = file.get<const char*>(varname);
-            auto result = std::make_shared<std::vector<std::string>>();
-            result->reserve(data.size());
-            for (const auto& d : data) {
-                result->push_back(d);
-            }
+            auto result = std::make_shared<std::vector<std::string>>(data.size());
+            std::transform(std::begin(data), std::end(data), std::begin(*result), [](const char* r) { return r; });
             p->provide<std::vector<std::string>>(outputname, result);
         } else if (type_name == "double") {
-            const auto data = file.get<double>(varname);
-            auto result = std::make_shared<std::vector<double>>();
-            result->reserve(data.size());
-            for (const auto& d : data) {
-                result->push_back(d);
-            }
+            auto result = std::make_shared<std::vector<double>>(file.get<double>(varname));
             p->provide<std::vector<double>>(outputname, result);
         } else {
             throw std::runtime_error("Unknown type '" + type_name + "'");
@@ -213,11 +205,8 @@ class RegionRasterGridWriterModule : public GridWriterModule<T> {
         }
         netCDF::File file(filename, 'w');
         file.set<T>(file.var<T>(varname, {file.lat(data->template size<1>()), file.lon(data->template size<2>())}), *data);
-        std::vector<const char*> regions_char;
-        regions_char.reserve(regions->size());
-        for (const auto& r : *regions) {
-            regions_char.push_back(r.c_str());
-        }
+        std::vector<const char*> regions_char(regions->size());
+        std::transform(std::begin(*regions), std::end(*regions), std::begin(regions_char), [](const std::string& r) { return r.c_str(); });
         file.set<const char*>(file.var<const char*>(regionvarname, {file.addDim(regionvarname, regions->size())}), regions_char);
     }
     inline pipeline::ModuleDescription describe() override {

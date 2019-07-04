@@ -73,7 +73,7 @@ class DimVar : public std::vector<T> {
             attributes.emplace_back(std::make_tuple(att.first, att.second.getType(), size, value));
         }
     }
-    DimVar(DimVar&) = delete;
+    DimVar(const DimVar&) = delete;
     DimVar(DimVar&&) = default;  // NOLINT(performance-noexcept-move-constructor,hicpp-noexcept-move) [cannot use noexpect here]
     NcDim write_to(NcFile& file) const {
         netCDF::NcDim result = file.addDim(name_m, size());
@@ -157,17 +157,17 @@ class File : public netCDF::NcFile {
 
     template<typename T>
     std::vector<T> get(const std::string& varname) {
-        auto var = getVar(varname);
-        std::vector<T> result(var.getDim(0).getSize());
-        var.getVar(&result[0]);
+        auto variable = getVar(varname);
+        std::vector<T> result(variable.getDim(0).getSize());
+        variable.getVar(&result[0]);
         return result;
     }
 
     template<typename T, std::size_t dim>
     nvector::Vector<T, dim> get(const std::string& varname) {
-        auto var = getVar(varname);
-        auto result = get_helper<T, 0, dim>::reserve(var);
-        var.getVar(&result.data()[0]);
+        auto variable = getVar(varname);
+        auto result = get_helper<T, 0, dim>::reserve(variable);
+        variable.getVar(&result.data()[0]);
         return result;
     }
 
@@ -210,8 +210,8 @@ class File : public netCDF::NcFile {
         lat_var.putAtt("long_name", "latitude");
         lat_var.putAtt("units", "degrees_north");
         lat_var.putAtt("axis", "Y");
-        for (unsigned int lat = 0; lat < lat_count; ++lat) {
-            lat_var.putVar({lat}, to_lat - (to_lat - from_lat) * (lat + 0.5) / lat_count);
+        for (std::size_t ilat = 0; ilat < lat_count; ++ilat) {
+            lat_var.putVar({ilat}, to_lat - (to_lat - from_lat) * (ilat + 0.5) / lat_count);
         }
         return lat_dim;
     }
@@ -223,8 +223,8 @@ class File : public netCDF::NcFile {
         lon_var.putAtt("long_name", "longitude");
         lon_var.putAtt("units", "degrees_east");
         lon_var.putAtt("axis", "X");
-        for (unsigned int lon = 0; lon < lon_count; ++lon) {
-            lon_var.putVar({lon}, from_lon + (to_lon - from_lon) * (lon + 0.5) / lon_count);
+        for (std::size_t ilon = 0; ilon < lon_count; ++ilon) {
+            lon_var.putVar({ilon}, from_lon + (to_lon - from_lon) * (ilon + 0.5) / lon_count);
         }
         return lon_dim;
     }
@@ -269,23 +269,23 @@ class File : public netCDF::NcFile {
         std::vector<netCDF::NcDim> dims;
         std::vector<std::size_t> sizes;
         std::vector<std::size_t> indices;
-        std::size_t size = var_p.getType().getSize();
+        auto s = var_p.getType().getSize();
         for (const auto& dim : var_p.getDims()) {
             dims.emplace_back(getDim(dim.getName()));
             sizes.emplace_back(dim.getSize());
             indices.emplace_back(0);
-            size *= dim.getSize();
+            s *= dim.getSize();
         }
         netCDF::NcVar res = addVar(var_p.getName(), var_p.getType().getTypeClass(), dims);
         res.setCompression(false, true, 7);
         for (const auto& att : var_p.getAtts()) {
-            std::size_t size = att.second.getAttLength();
-            std::vector<char> value(size);
+            const auto len = att.second.getAttLength();
+            std::vector<char> value(len);
             att.second.getValues(&value[0]);
-            res.putAtt(att.first, att.second.getType(), size, &value[0]);
+            res.putAtt(att.first, att.second.getType(), len, &value[0]);
         }
         std::vector<char> fill_value(var_p.getType().getSize());
-        std::vector<char> value(size);
+        std::vector<char> value(s);
         bool fill_mode;
         var_p.getFillModeParameters(fill_mode, &fill_value[0]);
         if (fill_mode) {

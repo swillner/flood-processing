@@ -20,6 +20,7 @@
 #ifndef FLOOD_PROCESSING_SUM_PER_REGION_H
 #define FLOOD_PROCESSING_SUM_PER_REGION_H
 
+#include <algorithm>
 #include "FortranGrid.h"
 #include "netcdf/File.h"
 #include "nvector.h"
@@ -82,11 +83,8 @@ class PerRegionWriter2d : public pipeline::Module {
         auto dim1 = p->consume<netCDF::DimVar<double>>(inputdim1name);
         netCDF::File file(filename, 'w');
 
-        std::vector<const char*> regions_char;
-        regions_char.reserve(regions->size());
-        for (const auto& r : *regions) {
-            regions_char.push_back(r.c_str());
-        }
+        std::vector<const char*> regions_char(regions->size());
+        std::transform(std::begin(*regions), std::end(*regions), std::begin(regions_char), [](const std::string& r) { return r.c_str(); });
         auto regiondim = file.addDim(regionvarname, regions->size());
         file.set<const char*>(file.var<const char*>(regionvarname, {regiondim}), regions_char);
 
