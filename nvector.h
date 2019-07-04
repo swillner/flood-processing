@@ -16,19 +16,19 @@ struct Slice;
 
 namespace detail {
 
-inline int multiply_all() { return 1; }
+constexpr inline int multiply_all() { return 1; }
 template<typename... Args>
-inline int multiply_all(int arg, Args... args) {
+constexpr inline int multiply_all(int arg, Args... args) {
     return arg * multiply_all(args...);
 }
 
 template<typename Arg>
-inline bool all_values_equal(Arg&& arg) {
+constexpr inline bool all_values_equal(Arg&& arg) {
     (void)arg;
     return true;
 }
 template<typename Arg1, typename Arg2, typename... Args>
-inline bool all_values_equal(Arg1&& arg1, Arg2&& arg2, Args&&... args) {
+constexpr inline bool all_values_equal(Arg1&& arg1, Arg2&& arg2, Args&&... args) {
     return arg1 == arg2 && all_values_equal(std::forward<Arg2>(arg2), std::forward<Args>(args)...);
 }
 
@@ -42,20 +42,20 @@ using all_equal = all_true<std::is_same<Args, T>::value...>;
 
 template<std::size_t c, std::size_t dim, typename... Args>
 struct foreach_dim {
-    static inline std::size_t end(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
+    static constexpr inline std::size_t end(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
         std::get<c>(pos) = std::get<c>(dims).begin + std::get<c>(dims).size;
         return foreach_dim<c + 1, dim>::end(index * std::get<c>(dims).size, pos, dims);
     }
-    static inline std::size_t begin(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
+    static constexpr inline std::size_t begin(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
         std::get<c>(pos) = 0;
         return foreach_dim<c + 1, dim>::begin(index * std::get<c>(dims).size, pos, dims);
     }
     template<typename Tref, typename Iterator>
-    static inline Tref dereference(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims, Iterator&& it) {
+    static constexpr inline Tref dereference(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims, Iterator&& it) {
         return foreach_dim<c + 1, dim>::template dereference<Tref>(index + (std::get<c>(pos) + std::get<c>(dims).begin) * std::get<c>(dims).stride, pos, dims,
                                                                    std::forward<Iterator>(it));
     }
-    static inline void increase(std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
+    static constexpr inline void increase(std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
         if (std::get<dim - 1 - c>(pos) == std::get<dim - 1 - c>(dims).size - 1) {
             std::get<dim - 1 - c>(pos) = 0;
             foreach_dim<c + 1, dim>::increase(pos, dims);
@@ -63,7 +63,7 @@ struct foreach_dim {
             ++std::get<dim - 1 - c>(pos);
         }
     }
-    static inline void increase(std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims, std::size_t by) {
+    static constexpr inline void increase(std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims, std::size_t by) {
         const std::size_t next = (std::get<dim - 1 - c>(pos) + by) / std::get<dim - 1 - c>(dims).size;
         std::get<dim - 1 - c>(pos) = (std::get<dim - 1 - c>(pos) + by) % std::get<dim - 1 - c>(dims).size;
         if (next > 0) {
@@ -71,72 +71,72 @@ struct foreach_dim {
         }
     }
     template<std::size_t... Ns, typename Function>
-    static inline void pass_parameters_void(const std::array<std::size_t, dim>& pos, Function&& func, Args&&... args) {
+    static constexpr inline void pass_parameters_void(const std::array<std::size_t, dim>& pos, Function&& func, Args&&... args) {
         foreach_dim<c + 1, dim, Args...>::template pass_parameters_void<Ns..., c>(pos, std::forward<Function>(func), std::forward<Args>(args)...);
     }
     template<std::size_t... Ns, typename Function>
-    static inline bool pass_parameters(const std::array<std::size_t, dim>& pos, Function&& func, Args&&... args) {
+    static constexpr inline bool pass_parameters(const std::array<std::size_t, dim>& pos, Function&& func, Args&&... args) {
         return foreach_dim<c + 1, dim, Args...>::template pass_parameters<Ns..., c>(pos, std::forward<Function>(func), std::forward<Args>(args)...);
     }
 };
 
 template<std::size_t dim, typename... Args>
 struct foreach_dim<dim, dim, Args...> {
-    static inline std::size_t end(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
+    static constexpr inline std::size_t end(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
         (void)pos;
         (void)dims;
         return index;
     }
-    static inline std::size_t begin(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
+    static constexpr inline std::size_t begin(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
         (void)pos;
         (void)dims;
         return index;
     }
     template<typename Tref, typename Iterator>
-    static inline Tref dereference(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims, Iterator&& it) {
+    static constexpr inline Tref dereference(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims, Iterator&& it) {
         (void)pos;
         (void)dims;
         return it[index];
     }
-    static inline void increase(std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
+    static constexpr inline void increase(std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
         std::get<0>(pos) = std::get<0>(dims).size;  // reset pos[0] to 1 beyond max value -> represents "end"
     }
-    static inline void increase(std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims, std::size_t by) {
+    static constexpr inline void increase(std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims, std::size_t by) {
         (void)by;
         std::get<0>(pos) = std::get<0>(dims).size;  // reset pos[0] to 1 beyond max value -> represents "end"
     }
     template<std::size_t... Ns, typename Function>
-    static inline void pass_parameters_void(const std::array<std::size_t, dim>& pos, Function&& func, Args&&... args) {
+    static constexpr inline void pass_parameters_void(const std::array<std::size_t, dim>& pos, Function&& func, Args&&... args) {
         func(std::get<Ns>(pos)..., args...);
     }
     template<std::size_t... Ns, typename Function>
-    static inline bool pass_parameters(const std::array<std::size_t, dim>& pos, Function&& func, Args&&... args) {
+    static constexpr inline bool pass_parameters(const std::array<std::size_t, dim>& pos, Function&& func, Args&&... args) {
         return func(std::get<Ns>(pos)..., args...);
     }
 };
 
-inline void pass() {}
+constexpr inline void pass() {}
 
 template<typename Arg>
-inline void pass(Arg&&) {}
+constexpr inline void pass(Arg&& /* unused */) {}
 
 template<typename Arg, typename... Args>
-inline void pass(Arg&&, Args&&... args) {
+constexpr inline void pass(Arg&& /* unused */, Args&&... args) {
     pass(std::forward<Args>(args)...);
 }
 
 template<typename Arg>
-inline bool none_ended(Arg&& it) {
+constexpr inline bool none_ended(Arg&& it) {
     return !it.ended();
 }
 
 template<typename Arg, typename... Args>
-inline bool none_ended(Arg&& it, Args&&... its) {
+constexpr inline bool none_ended(Arg&& it, Args&&... its) {
     return !it.ended() && none_ended(std::forward<Args>(its)...);
 }
 
 template<typename Function, typename Additional, typename Arg, typename... Args>
-inline bool foreach_iterator(Function&& func, Additional&& temp, Arg&& it, Args&&... its) {
+constexpr inline bool foreach_iterator(Function&& func, Additional&& temp, Arg&& it, Args&&... its) {
     (void)temp;
     while (none_ended(std::forward<Arg>(it), std::forward<Args>(its)...)) {
         if (!foreach_dim<0, Arg::dimensions, typename Arg::reference_type, typename Args::reference_type...>::template pass_parameters(
@@ -166,48 +166,48 @@ inline void foreach_iterator_parallel(Function&& func, Additional&& temp, Arg&& 
 template<std::size_t i, std::size_t n, typename... Args>
 struct foreach_helper {
     template<typename Function, std::size_t... Ns>
-    static inline bool foreach_view(Function&& func, const std::tuple<Args...>& views) {
+    static constexpr inline bool foreach_view(Function&& func, const std::tuple<Args...>& views) {
         return foreach_helper<i + 1, n, Args...>::template foreach_view<Function, Ns..., i>(std::forward<Function>(func), views);
     }
     template<typename Function, std::size_t... Ns>
-    static inline void foreach_view_parallel(Function&& func, const std::tuple<Args...>& views) {
+    static constexpr inline void foreach_view_parallel(Function&& func, const std::tuple<Args...>& views) {
         foreach_helper<i + 1, n, Args...>::template foreach_view_parallel<Function, Ns..., i>(std::forward<Function>(func), views);
     }
     template<typename Function, typename Splittype, std::size_t... Ns>
-    static inline bool foreach_split(Function&& func, const std::tuple<Args...>& views) {
+    static constexpr inline bool foreach_split(Function&& func, const std::tuple<Args...>& views) {
         return foreach_helper<i + 1, n, Args...>::template foreach_split<Function, Splittype, Ns..., i>(std::forward<Function>(func), views);
     }
     template<typename Function, typename Splittype, std::size_t... Ns>
-    static inline void foreach_split_parallel(Function&& func, const std::tuple<Args...>& views) {
+    static constexpr inline void foreach_split_parallel(Function&& func, const std::tuple<Args...>& views) {
         foreach_helper<i + 1, n, Args...>::template foreach_split_parallel<Function, Splittype, Ns..., i>(std::forward<Function>(func), views);
     }
 };
 
 template<typename Function, typename... Args>
-inline bool foreach_split_helper(Function&& func, Args&&... splits) {
+constexpr inline bool foreach_split_helper(Function&& func, Args&&... splits) {
     return foreach_iterator(func, std::make_tuple(splits...), std::begin(splits)...);
 }
 template<typename Function, typename... Args>
-inline void foreach_split_helper_parallel(Function&& func, Args&&... splits) {
+constexpr inline void foreach_split_helper_parallel(Function&& func, Args&&... splits) {
     foreach_iterator_parallel(func, std::make_tuple(splits...), std::begin(splits)...);
 }
 
 template<std::size_t n, typename... Args>
 struct foreach_helper<n, n, Args...> {
     template<typename Function, std::size_t... Ns>
-    static inline bool foreach_view(Function&& func, const std::tuple<Args...>& views) {
+    static constexpr inline bool foreach_view(Function&& func, const std::tuple<Args...>& views) {
         return foreach_iterator(std::forward<Function>(func), 0, std::begin(std::get<Ns>(views))...);
     }
     template<typename Function, std::size_t... Ns>
-    static inline void foreach_view_parallel(Function&& func, const std::tuple<Args...>& views) {
+    static constexpr inline void foreach_view_parallel(Function&& func, const std::tuple<Args...>& views) {
         foreach_iterator_parallel(std::forward<Function>(func), 0, std::begin(std::get<Ns>(views))...);
     }
     template<typename Function, typename Splittype, std::size_t... Ns>
-    static inline bool foreach_split(Function&& func, const std::tuple<Args...>& views) {
+    static constexpr inline bool foreach_split(Function&& func, const std::tuple<Args...>& views) {
         return foreach_split_helper(std::forward<Function>(func), std::get<Ns>(views).template split<Splittype>()...);
     }
     template<typename Function, typename Splittype, std::size_t... Ns>
-    static inline void foreach_split_parallel(Function&& func, const std::tuple<Args...>& views) {
+    static constexpr inline void foreach_split_parallel(Function&& func, const std::tuple<Args...>& views) {
         foreach_split_helper_parallel(std::forward<Function>(func), std::get<Ns>(views).template split<Splittype>()...);
     }
 };
@@ -248,9 +248,9 @@ class View {
         std::array<Slice, inner_dim> dims;
 
       public:
-        SplitViewHandler(Iterator it_p, std::array<Slice, inner_dim> dims_p) : it(std::move(it_p)), dims(std::move(dims_p)){};
-        inline View<T, inner_dim, Iterator, Tref> operator[](std::size_t index) { return {it + index, dims}; }
-        inline const View<T, inner_dim, Iterator, Tref> operator[](std::size_t index) const { return {it + index, dims}; }
+        constexpr SplitViewHandler(Iterator it_p, std::array<Slice, inner_dim> dims_p) : it(std::move(it_p)), dims(std::move(dims_p)){};
+        inline constexpr View<T, inner_dim, Iterator, Tref> operator[](std::size_t index) { return {it + index, dims}; }
+        inline constexpr const View<T, inner_dim, Iterator, Tref> operator[](std::size_t index) const { return {it + index, dims}; }
     };
 
     template<std::size_t inner_dim, std::size_t outer_dim>
@@ -262,9 +262,9 @@ class View {
       protected:
         View* view = nullptr;
         std::array<std::size_t, dim> pos_m;
-        std::size_t total_index;
-        std::size_t end_index;
-        iterator(){};
+        std::size_t total_index = 0;
+        std::size_t end_index = 0;
+        iterator() = default;  // NOLINT(hicpp-member-init,cppcoreguidelines-pro-type-member-init)
         iterator(View* view_p, std::array<std::size_t, dim> pos_p, std::size_t total_index_p, std::size_t end_index_p)
             : view(view_p), pos_m(pos_p), total_index(total_index_p), end_index(end_index_p){};
 
@@ -318,9 +318,9 @@ class View {
       protected:
         View const* view = nullptr;
         std::array<std::size_t, dim> pos_m;
-        std::size_t total_index;
-        std::size_t end_index;
-        const_iterator(){};
+        std::size_t total_index = 0;
+        std::size_t end_index = 0;
+        const_iterator() = default;  // NOLINT(hicpp-member-init,cppcoreguidelines-pro-type-member-init)
         const_iterator(View* view_p, std::array<std::size_t, dim> pos_p, std::size_t total_index_p, std::size_t end_index_p)
             : view(view_p), pos_m(pos_p), total_index(total_index_p), end_index(end_index_p){};
 
@@ -510,18 +510,18 @@ class View {
     template<std::size_t inner_dim>
     using split_type = View<T, inner_dim, Iterator, Tref>;
 
-    View(){};
+    View() = default;
     View(const View&) = delete;
-    View(View&&) = default;
+    View(View&&) noexcept = default;
     View(Iterator it_p, std::array<Slice, dim> dims_p) : it(std::move(it_p)), dims(std::move(dims_p)){};
 
     template<typename... Args, typename std::enable_if<detail::all_equal<Slice, Args...>::value>::type* = nullptr>
-    View(Iterator it_p, Args&&... args) : it(std::move(it_p)) {
+    explicit View(Iterator it_p, Args&&... args) : it(std::move(it_p)) {
         initialize_slices<0>(std::forward<Args>(args)...);
     }
 
     template<typename... Args, typename std::enable_if<detail::all_equal<std::size_t, Args...>::value>::type* = nullptr>
-    View(Iterator it_p, Args&&... args) : it(std::move(it_p)) {
+    explicit View(Iterator it_p, Args&&... args) : it(std::move(it_p)) {
         initialize_sizes<0>(std::forward<Args>(args)...);
     }
 
@@ -620,7 +620,7 @@ class Vector : public View<T, dim, typename Storage::iterator> {
     Vector() { it = std::begin(data_m); }
 
     template<typename... Args>
-    Vector(const T& initial_value, Args&&... args) {
+    explicit Vector(const T& initial_value, Args&&... args) {
         this->template initialize_sizes<0>(std::forward<Args>(args)...);
         data_m.resize(detail::multiply_all(std::forward<Args>(args)...), initial_value);
         it = std::begin(data_m);
