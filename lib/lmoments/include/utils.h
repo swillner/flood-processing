@@ -146,7 +146,9 @@ class distribution {
     virtual T cdf(T x) const = 0;                                     // cdf*
     virtual T quantile(T f) const = 0;                                // qua*
     virtual std::vector<T> get_parameters() const = 0;
+    virtual ~distribution() = default;
 };
+
 }  // namespace lmoments
 
 #endif

@@ -17,9 +17,12 @@ class GUM : public distribution<T> {
     T a = 0;
 
   public:
-    GUM(){};
     template<typename DataVector = std::vector<T>>
-    explicit GUM(const DataVector& x) { fit_data(x); }
+    static GUM from_data(const DataVector& x) {
+        GUM res;
+        res.fit_data(x);
+        return res;
+    }
 
     template<typename DataVector = std::vector<T>>
     inline void fit_data(const DataVector& x) {
@@ -65,7 +68,7 @@ class GUM : public distribution<T> {
     }
 
     inline T quantile(T f) const override {
-        if (f <= 0 || f >= 1) {
+        if (f <= 0.0 || f >= 1.0) {
             throw std::invalid_argument("argument out of range");
         }
         return u - a * std::log(-std::log(f));

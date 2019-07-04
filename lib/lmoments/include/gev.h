@@ -19,9 +19,12 @@ class GEV : public distribution<T> {
     bool converged_m = true;
 
   public:
-    GEV(){};
     template<typename DataVector = std::vector<T>>
-    explicit GEV(const DataVector& x) { fit_data(x); }
+    static inline GEV from_data(const DataVector& x) {
+        GEV res;
+        res.fit_data(x);
+        return res;
+    }
 
     template<typename DataVector = std::vector<T>>
     inline void fit_data(const DataVector& x) {
@@ -168,13 +171,12 @@ class GEV : public distribution<T> {
         }
         if (g < 0) {
             return 0;
-        } else {
-            return 1;
         }
+        return 1;
     }
 
     inline T quantile(T f) const override {
-        if (f <= 0 || f >= 1) {
+        if (f <= 0.0 || f >= 1.0) {
             if ((f == 0 && g < 0) || (f == 1 && g > 0)) {
                 return u + a / g;
             }
