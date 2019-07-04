@@ -42,7 +42,7 @@ endfunction()
 
 
 function(set_default_build_type BUILD_TYPE)
-  if(${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION} GREATER 3.8)
+  if(${CMAKE_VERSION} VERSION_GREATER "3.8.0")
     cmake_policy(SET CMP0069 NEW) # for INTERPROCEDURAL_OPTIMIZATION
   endif()
   if(NOT CMAKE_BUILD_TYPE)
@@ -89,7 +89,7 @@ endfunction()
 
 function(set_build_type_specifics TARGET)
   if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel" OR CMAKE_BUILD_TYPE STREQUAL "Profile")
-    if(${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION} GREATER 3.8)
+    if(${CMAKE_VERSION} VERSION_GREATER "3.8.0")
       message(STATUS "Enabling interprocedural optimization")
       set_property(TARGET ${TARGET} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
     endif()
