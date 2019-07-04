@@ -33,7 +33,7 @@ class ReturnLevelLookup : public pipeline::Module {
     std::string return_periods_name;
 
   public:
-    ReturnLevelLookup(const settings::SettingsNode& settings) {
+    explicit ReturnLevelLookup(const settings::SettingsNode& settings) {
         interpolate = settings["interpolate"].as<bool>();
         return_periods_name = settings["input"]["return_periods"].as<std::string>();
     }

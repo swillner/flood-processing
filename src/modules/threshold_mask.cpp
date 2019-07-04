@@ -84,6 +84,9 @@ void ThresholdMask<T>::run(pipeline::Pipeline* p) {
         const auto threshold_raster = duplicate_time_if_necessary(size, *threshold_raster_raw);
         nvector::foreach_view_parallel(nvector::collect(*apply_to, compare_to, threshold_raster, *output), [&](std::size_t t, std::size_t lat, std::size_t lon,
                                                                                                                T a, T c, T this_threshold, T& out) {
+            (void)t;
+            (void)lat;
+            (void)lon;
             if (!std::isnan(a) && !std::isnan(c) && !std::isnan(this_threshold)) {
                 if ((c < this_threshold && less_than) || (c > this_threshold && !less_than) || (c == this_threshold && or_equal)) {
                     out = a;
@@ -96,6 +99,9 @@ void ThresholdMask<T>::run(pipeline::Pipeline* p) {
     } else {
         nvector::foreach_view_parallel(nvector::collect(*apply_to, compare_to, *output),
                                        [&](std::size_t t, std::size_t lat, std::size_t lon, T a, T c, T& out) {
+                                           (void)t;
+                                           (void)lat;
+                                           (void)lon;
                                            if (!std::isnan(a) && !std::isnan(c)) {
                                                if ((c < threshold && less_than) || (c > threshold && !less_than) || (c == threshold && or_equal)) {
                                                    out = a;

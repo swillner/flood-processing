@@ -29,7 +29,7 @@ file(GLOB MODULE_SOURCES src/modules/*.cpp)
 add_executable(flood_processing src/main.cpp ${MODULE_SOURCES})
 
 target_include_directories(flood_processing PRIVATE include lib/lmoments/include lib/cpp-library)
-target_compile_options(flood_processing PRIVATE -std=c++11)
+target_compile_options(flood_processing PRIVATE -std=c++14)
 
 set_advanced_cpp_warnings(flood_processing)
 set_build_type_specifics(flood_processing)

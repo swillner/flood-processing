@@ -46,7 +46,7 @@ nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& hi
             if (history_series(0) >= 0 && history_series(0) < 1e10 && !std::isnan(history_series(0))) {
                 try {
                     std::vector<T> view(length);
-                    if (from_vec.size() == 0) {
+                    if (from_vec.empty()) {
                         std::partial_sort_copy(std::begin(history_series), std::end(history_series), std::begin(view), std::end(view));
                     } else {
                         std::size_t offset = 0;
@@ -64,10 +64,10 @@ nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& hi
                     std::unique_ptr<lmoments::distribution<T>> d;
                     switch (distribution) {
                         case Distribution::GEV:
-                            d.reset(new lmoments::GEV<T>(view));
+                            d = std::make_unique<lmoments::GEV<T>>(lmoments::GEV<T>::from_data(view));
                             break;
                         case Distribution::GUM:
-                            d.reset(new lmoments::GUM<T>(view));
+                            d = std::make_unique<lmoments::GUM<T>>(lmoments::GUM<T>::from_data(view));
                             break;
                     }
                     for (std::size_t i = 0; i < size; ++i) {

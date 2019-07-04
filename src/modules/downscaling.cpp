@@ -51,7 +51,7 @@ inline void Downscaling<T>::coarse_to_fine(const Area& area, const nvector::View
 template<typename T>
 template<typename Function>
 inline void Downscaling<T>::fine_to_med_dx_dy(
-    std::size_t area_size_x, bool area_has_lonlat, T* p_fine_flddph, float* lat, float* lon, int dx, int dy, Function&& func) {
+    std::size_t area_size_x, bool area_has_lonlat, T* p_fine_flddph, float const* lat, float const* lon, int dx, int dy, Function&& func) {
     const int offset = dy * area_size_x + dx;
     if (!area_has_lonlat || *(lon + offset) > -9999.0) {
         T dlon;
@@ -171,7 +171,8 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
     if (inverse_target_cell_size < 200) {
         if (inverse_target_cell_size % 3 != 0) {
             throw std::runtime_error("inverse_target_cell_size must be 200 or a multiple of 3");
-        } else if (fine_lat_count % (inverse_target_cell_size / 3) != 0) {
+        }
+        if (fine_lat_count % (inverse_target_cell_size / 3) != 0) {
             throw std::runtime_error("invalid inverse_target_cell_size");
         }
     }

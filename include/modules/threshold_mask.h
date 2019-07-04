@@ -41,14 +41,13 @@ class ThresholdMask : public pipeline::Module {
     std::string threshold_raster_name;
 
   public:
-    ThresholdMask(const settings::SettingsNode& settings);
+    explicit ThresholdMask(const settings::SettingsNode& settings);
     void run(pipeline::Pipeline* p) override;
     inline pipeline::ModuleDescription describe() override {
         if (use_threshold_raster) {
             return pipeline::ModuleDescription{"threshold_mask", {threshold_raster_name, compare_to_name, apply_to_name}, {output_name}};
-        } else {
-            return pipeline::ModuleDescription{"threshold_mask", {compare_to_name, apply_to_name}, {output_name}};
         }
+        return pipeline::ModuleDescription{"threshold_mask", {compare_to_name, apply_to_name}, {output_name}};
     }
 };
 

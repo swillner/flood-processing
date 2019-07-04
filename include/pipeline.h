@@ -41,6 +41,7 @@ class Module {
   public:
     virtual void run(Pipeline* p) = 0;
     virtual ModuleDescription describe() = 0;
+    virtual ~Module() = default;
 };
 
 class Pipeline {
@@ -51,18 +52,18 @@ class Pipeline {
         std::shared_ptr<void> data;
 
       public:
-        void want() { ++want_count; }
-        bool consume() {
+        constexpr void want() { ++want_count; }
+        constexpr bool consume() {
             --want_count;
             return want_count == 0;
         }
-        bool is_set() const { return static_cast<bool>(data); }
+        inline bool is_set() const { return static_cast<bool>(data); }
         template<typename T>
-        std::shared_ptr<T> get() {
+        constexpr std::shared_ptr<T> get() {
             return std::static_pointer_cast<T>(data);
         }
         template<typename T>
-        void set(std::shared_ptr<T> d) {
+        constexpr void set(std::shared_ptr<T> d) {
             data = d;
         }
     };
@@ -71,7 +72,7 @@ class Pipeline {
 
   public:
     template<typename T>
-    std::shared_ptr<T> consume(DataDescription desc) {
+    inline std::shared_ptr<T> consume(const DataDescription& desc) {
         auto data = warehouse.find(desc);
         if (data == warehouse.end()) {
             throw std::runtime_error("input " + desc + " has not been registered");
@@ -85,22 +86,22 @@ class Pipeline {
         }
         return result;
     }
-    bool is_wanted(DataDescription desc) const { return warehouse.find(desc) != warehouse.end(); }
+    inline bool is_wanted(const DataDescription& desc) const { return warehouse.find(desc) != warehouse.end(); }
     template<typename T>
-    void provide(DataDescription desc, std::shared_ptr<T> data) {
+    inline void provide(const DataDescription& desc, std::shared_ptr<T> data) {
         auto d = warehouse.find(desc);
         if (d != warehouse.end()) {
             d->second.set<T>(data);
         }
     }
-    void register_module(Module* m) {
+    inline void register_module(std::unique_ptr<Module> m) {
         ModuleDescription desc = m->describe();
         for (const auto& input : desc.inputs) {
             warehouse[input].want();
         }
-        modules.emplace_back(std::make_tuple(std::unique_ptr<Module>(m), desc));
+        modules.emplace_back(std::make_tuple(std::move(m), desc));
     }
-    void run(bool verbose = false) {
+    inline void run(bool verbose = false) {
         std::size_t i = 0;
         for (const auto& m : modules) {
             if (verbose) {

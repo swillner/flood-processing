@@ -43,7 +43,7 @@ class ArrayReaderModule : public pipeline::Module {
     std::string type_name;
 
   public:
-    ArrayReaderModule(const settings::SettingsNode& settings) {
+    explicit ArrayReaderModule(const settings::SettingsNode& settings) {
         filename = settings["filename"].as<std::string>();
         varname = settings["variable"].as<std::string>();
         outputname = settings["output"].as<std::string>();
@@ -84,7 +84,7 @@ class GridReaderModule : public pipeline::Module {
     std::string outputtimename;
 
   public:
-    GridReaderModule(const settings::SettingsNode& settings) {
+    explicit GridReaderModule(const settings::SettingsNode& settings) {
         filename = settings["filename"].as<std::string>();
         varname = settings["variable"].as<std::string>();
         outputgridname = settings["output"]["grid"].as<std::string>("");
@@ -135,7 +135,7 @@ class TimeSliceModule : public pipeline::Module {
     std::size_t i;
 
   public:
-    TimeSliceModule(const settings::SettingsNode& settings) {
+    explicit TimeSliceModule(const settings::SettingsNode& settings) {
         inputname = settings["inputname"].as<std::string>();
         outputname = settings["outputname"].as<std::string>();
         i = settings["index"].as<std::size_t>();
@@ -159,7 +159,7 @@ class GridWriterModule : public pipeline::Module {
     std::string inputtimename;
 
   public:
-    GridWriterModule(const settings::SettingsNode& settings) {
+    explicit GridWriterModule(const settings::SettingsNode& settings) {
         filename = settings["filename"].as<std::string>();
         varname = settings["variable"].as<std::string>();
         inputgridname = settings["input"]["grid"].as<std::string>();
@@ -186,9 +186,8 @@ class GridWriterModule : public pipeline::Module {
     inline pipeline::ModuleDescription describe() override {
         if (inputtimename.empty()) {
             return pipeline::ModuleDescription{"grid_writer", {inputgridname}, {}};
-        } else {
-            return pipeline::ModuleDescription{"grid_writer", {inputgridname, inputtimename}, {}};
         }
+        return pipeline::ModuleDescription{"grid_writer", {inputgridname, inputtimename}, {}};
     }
 };
 
@@ -202,7 +201,7 @@ class RegionRasterGridWriterModule : public GridWriterModule<T> {
     std::string inputregionsname;
 
   public:
-    RegionRasterGridWriterModule(const settings::SettingsNode& settings) : GridWriterModule<T>(settings) {
+    explicit RegionRasterGridWriterModule(const settings::SettingsNode& settings) : GridWriterModule<T>(settings) {
         regionvarname = settings["region_variable"].as<std::string>();
         inputregionsname = settings["input"]["regions"].as<std::string>();
     }

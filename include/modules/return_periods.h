@@ -25,9 +25,10 @@
 #include <vector>
 #include "nvector.h"
 #include "pipeline.h"
+
 namespace settings {
 class SettingsNode;
-}
+}  // namespace settings
 
 namespace flood_processing {
 namespace modules {
@@ -48,7 +49,7 @@ class ReturnPeriods : public pipeline::Module {
     nvector::Vector<T, 3> return_periods(nvector::Vector<T, 3>& history_discharge, nvector::Vector<T, 3>& projection_discharge);
 
   public:
-    ReturnPeriods(const settings::SettingsNode& settings);
+    explicit ReturnPeriods(const settings::SettingsNode& settings);
     void run(pipeline::Pipeline* p) override;
 
     inline pipeline::ModuleDescription describe() override {

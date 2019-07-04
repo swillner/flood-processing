@@ -43,43 +43,43 @@ static void run(const settings::SettingsNode& settings) {
         const auto& mod = m["module"].as<settings::hstring>();
         switch (mod) {
             case settings::hstring::hash("array_reader"):
-                p.register_module(new pipeline::ArrayReaderModule(m));
+                p.register_module(std::make_unique<pipeline::ArrayReaderModule>(m));
                 break;
             case settings::hstring::hash("grid_reader"):
-                p.register_module(new pipeline::GridReaderModule<T>(m));
+                p.register_module(std::make_unique<pipeline::GridReaderModule<T>>(m));
                 break;
             case settings::hstring::hash("region_raster_grid_writer"):
-                p.register_module(new pipeline::RegionRasterGridWriterModule<T>(m));
+                p.register_module(std::make_unique<pipeline::RegionRasterGridWriterModule<T>>(m));
                 break;
             case settings::hstring::hash("time_slice"):
-                p.register_module(new pipeline::TimeSliceModule<T>(m));
+                p.register_module(std::make_unique<pipeline::TimeSliceModule<T>>(m));
                 break;
             case settings::hstring::hash("grid_writer"):
-                p.register_module(new pipeline::GridWriterModule<T>(m));
+                p.register_module(std::make_unique<pipeline::GridWriterModule<T>>(m));
                 break;
             case settings::hstring::hash("downscaling"):
-                p.register_module(new flood_processing::modules::Downscaling<T>(m));
+                p.register_module(std::make_unique<flood_processing::modules::Downscaling<T>>(m));
                 break;
             case settings::hstring::hash("return_periods"):
-                p.register_module(new flood_processing::modules::ReturnPeriods<T>(m));
+                p.register_module(std::make_unique<flood_processing::modules::ReturnPeriods<T>>(m));
                 break;
             case settings::hstring::hash("return_level_lookup"):
-                p.register_module(new flood_processing::modules::ReturnLevelLookup<T>(m));
+                p.register_module(std::make_unique<flood_processing::modules::ReturnLevelLookup<T>>(m));
                 break;
             case settings::hstring::hash("threshold_mask"):
-                p.register_module(new flood_processing::modules::ThresholdMask<T>(m));
+                p.register_module(std::make_unique<flood_processing::modules::ThresholdMask<T>>(m));
                 break;
             case settings::hstring::hash("rasterization"):
-                p.register_module(new flood_processing::modules::Rasterization<T>(m));
+                p.register_module(std::make_unique<flood_processing::modules::Rasterization<T>>(m));
                 break;
             case settings::hstring::hash("region_index_rasterization"):
-                p.register_module(new flood_processing::modules::RegionIndexRasterization<T>(m));
+                p.register_module(std::make_unique<flood_processing::modules::RegionIndexRasterization<T>>(m));
                 break;
             case settings::hstring::hash("sum_per_region"):
-                p.register_module(new flood_processing::modules::SumPerRegion<T>(m));
+                p.register_module(std::make_unique<flood_processing::modules::SumPerRegion<T>>(m));
                 break;
             case settings::hstring::hash("per_region_writer2d"):
-                p.register_module(new flood_processing::modules::PerRegionWriter2d<T>(m));
+                p.register_module(std::make_unique<flood_processing::modules::PerRegionWriter2d<T>>(m));
                 break;
             default:
                 throw std::runtime_error("unknown module '" + std::string(mod) + "'");
@@ -124,13 +124,13 @@ int main(int argc, char* argv[]) {
         } else {
             if (arg == "-") {
                 std::cin >> std::noskipws;
-                run(settings::SettingsNode(std::unique_ptr<settings::YAML>(new settings::YAML(std::cin))));
+                run(settings::SettingsNode(std::make_unique<settings::YAML>(std::cin)));
             } else {
                 std::ifstream settings_file(arg);
                 if (!settings_file) {
                     throw std::runtime_error("Cannot open " + arg);
                 }
-                run(settings::SettingsNode(std::unique_ptr<settings::YAML>(new settings::YAML(settings_file))));
+                run(settings::SettingsNode(std::make_unique<settings::YAML>(settings_file)));
             }
             return 0;
         }

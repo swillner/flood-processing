@@ -18,46 +18,15 @@
 #ifndef NETCDF_FILE_H
 #define NETCDF_FILE_H
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wignored-qualifiers"
-#pragma GCC diagnostic ignored "-Wpedantic"
-#pragma GCC diagnostic ignored "-Wunused-variable"
-
-#pragma warning(push)
-#pragma warning(disable : 858)
-
-#include <ncDim.h>
-#include <ncFile.h>
-#include <ncGroupAtt.h>
-#include <ncType.h>
-#include <ncVar.h>
-#include <netcdf>
-
-#pragma warning(pop)
-
-#pragma GCC diagnostic pop
-
-#include <assert.h>
+#include <cassert>
 #include <iostream>
 #include <limits>
 #include <string>
 #include <vector>
+#include "netcdftools.h"
 #include "nvector.h"
 
 namespace netCDF {
-
-inline bool check_dimensions(const netCDF::NcVar& var, const std::vector<std::string>& names) {
-    const auto& dims = var.getDims();
-    if (dims.size() != names.size()) {
-        return false;
-    }
-    for (std::size_t i = 0; i < names.size(); ++i) {
-        if (dims[i].getName() != names[i]) {
-            return false;
-        }
-    }
-    return true;
-}
 
 template<typename T>
 struct NetCDFType {};
@@ -90,32 +59,27 @@ template<typename T>
 class DimVar : public std::vector<T> {
   protected:
     const std::string name_m;
-    std::vector<std::tuple<std::string, NcType, std::size_t, void*>> attributes;
+    std::vector<std::tuple<std::string, NcType, std::size_t, std::vector<char>>> attributes;
 
   public:
     using std::vector<T>::size;
 
-    DimVar(NcDim dim, NcVar var) : name_m(dim.getName()), std::vector<T>(dim.getSize()) {
+    DimVar(const NcDim& dim, const NcVar& var) : name_m(dim.getName()), std::vector<T>(dim.getSize()) {
         var.getVar(&(*this)[0]);
         for (const auto& att : var.getAtts()) {
             std::size_t size = att.second.getAttLength();
-            void* value = malloc(size);
-            att.second.getValues(value);
+            std::vector<char> value(size);
+            att.second.getValues(&value[0]);
             attributes.emplace_back(std::make_tuple(att.first, att.second.getType(), size, value));
         }
     }
     DimVar(DimVar&) = delete;
-    DimVar(DimVar&&) = default;
-    ~DimVar() {
-        for (auto& att : attributes) {
-            free(std::get<3>(att));
-        }
-    }
+    DimVar(DimVar&&) = default;  // NOLINT(performance-noexcept-move-constructor,hicpp-noexcept-move) [cannot use noexpect here]
     NcDim write_to(NcFile& file) const {
         netCDF::NcDim result = file.addDim(name_m, size());
         netCDF::NcVar var = file.addVar(name_m, NetCDFType<T>::type, {result});
         for (const auto& att : attributes) {
-            var.putAtt(std::get<0>(att), std::get<1>(att), std::get<2>(att), std::get<3>(att));
+            var.putAtt(std::get<0>(att), std::get<1>(att), std::get<2>(att), &std::get<3>(att)[0]);
         }
         var.putVar(&(*this)[0]);
         return result;
@@ -297,9 +261,8 @@ class File : public netCDF::NcFile {
     netCDF::NcDim dim(const netCDF::NcDim& dim) {
         if (dim.isUnlimited()) {
             return addDim(dim.getName());
-        } else {
-            return addDim(dim.getName(), dim.getSize());
         }
+        return addDim(dim.getName(), dim.getSize());
     }
 
     netCDF::NcVar var(const netCDF::NcVar& var_p) {
@@ -317,22 +280,19 @@ class File : public netCDF::NcFile {
         res.setCompression(false, true, 7);
         for (const auto& att : var_p.getAtts()) {
             std::size_t size = att.second.getAttLength();
-            void* value = malloc(size);
-            att.second.getValues(value);
-            res.putAtt(att.first, att.second.getType(), size, value);
-            free(value);
+            std::vector<char> value(size);
+            att.second.getValues(&value[0]);
+            res.putAtt(att.first, att.second.getType(), size, &value[0]);
         }
-        void* fill_value = malloc(var_p.getType().getSize());
-        void* value = malloc(size);
+        std::vector<char> fill_value(var_p.getType().getSize());
+        std::vector<char> value(size);
         bool fill_mode;
-        var_p.getFillModeParameters(fill_mode, fill_value);
+        var_p.getFillModeParameters(fill_mode, &fill_value[0]);
         if (fill_mode) {
-            res.setFill(fill_mode, fill_value);
+            res.setFill(fill_mode, &fill_value[0]);
         }
-        var_p.getVar(value);
-        res.putVar(indices, sizes, value);
-        free(fill_value);
-        free(value);
+        var_p.getVar(&value[0]);
+        res.putVar(indices, sizes, &value[0]);
         return res;
     }
 };

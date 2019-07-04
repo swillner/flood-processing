@@ -41,15 +41,16 @@ class FortranGrid {
 
         switch (mode) {
             case 'r': {
-                fd = open(filename.c_str(), O_RDONLY);
+                fd = open(filename.c_str(), O_RDONLY | O_CLOEXEC);  // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg,hicpp-signed-bitwise)
                 if (fd < 0) {
                     throw std::runtime_error("could not open file " + filename);
                 }
-                data.reset((T*)mmap(NULL, size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0));
+                data.reset(static_cast<T*>(mmap(nullptr, size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0)));  // NOLINT(hicpp-signed-bitwise)
             } break;
 
             case 'w': {
-                fd = open(filename.c_str(), O_RDWR | O_CREAT, (mode_t)0600);
+                fd = open(filename.c_str(), O_RDWR | O_CREAT | O_CLOEXEC,  // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg,hicpp-signed-bitwise)
+                          static_cast<mode_t>(0600));
                 if (fd < 0) {
                     throw std::runtime_error("could not create file " + filename);
                 }
@@ -61,17 +62,17 @@ class FortranGrid {
                 if (rc < 0) {
                     throw std::runtime_error("write failed");
                 }
-                data.reset((T*)mmap(NULL, size, PROT_WRITE, MAP_SHARED, fd, 0));
+                data.reset(static_cast<T*>(mmap(nullptr, size, PROT_WRITE, MAP_SHARED, fd, 0)));
             } break;
 
             default:
                 throw std::runtime_error("unknown file mode");
         }
 
-        if (data.get() == MAP_FAILED) {
+        if (data.get() == MAP_FAILED) {  // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
             throw std::runtime_error("mmap failed");
         }
-        int rc = madvise(data.get(), size, MADV_WILLNEED | MADV_SEQUENTIAL);
+        int rc = madvise(data.get(), size, MADV_WILLNEED | MADV_SEQUENTIAL);  // NOLINT(hicpp-signed-bitwise)
         if (rc < 0) {
             throw std::runtime_error("madvice failed");
         }
@@ -83,9 +84,8 @@ class FortranGrid {
         data.release();
     }
 
-    operator T*() { return data.get(); }
-
-    operator T*() const { return data.get(); }
+    operator T*() { return data.get(); }        // NOLINT(hicpp-explicit-conversions,google-explicit-constructor)
+    operator T*() const { return data.get(); }  // NOLINT(hicpp-explicit-conversions,google-explicit-constructor)
 
     T& operator()(const std::size_t& lon, const std::size_t& lat) noexcept { return data[lat * lon_count_ + lon]; }
 

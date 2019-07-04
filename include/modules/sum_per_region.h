@@ -40,7 +40,7 @@ class SumPerRegion : public pipeline::Module {
     std::string varname;
 
   public:
-    SumPerRegion(const settings::SettingsNode& settings) {
+    explicit SumPerRegion(const settings::SettingsNode& settings) {
         outputname = settings["outputname"].as<std::string>();
         filename = settings["filename"].as<std::string>("");
         if (!filename.empty()) {
@@ -54,9 +54,8 @@ class SumPerRegion : public pipeline::Module {
     inline pipeline::ModuleDescription describe() override {
         if (filename.empty()) {
             return pipeline::ModuleDescription{"sum_per_region", {inputname, "region_index_raster", "regions"}, {outputname}};
-        } else {
-            return pipeline::ModuleDescription{"sum_per_region", {"region_index_raster", "regions"}, {outputname}};
         }
+        return pipeline::ModuleDescription{"sum_per_region", {"region_index_raster", "regions"}, {outputname}};
     }
 };
 
@@ -70,7 +69,7 @@ class PerRegionWriter2d : public pipeline::Module {
     std::string varname;
 
   public:
-    PerRegionWriter2d(const settings::SettingsNode& settings) {
+    explicit PerRegionWriter2d(const settings::SettingsNode& settings) {
         filename = settings["filename"].as<std::string>();
         inputarrayname = settings["input"]["array"].as<std::string>();
         inputdim1name = settings["input"]["dim1"].as<std::string>();

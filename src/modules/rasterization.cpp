@@ -26,11 +26,16 @@
 #include <gdal_alg.h>
 #include <gdal_priv.h>
 #include <ogrsf_frmts.h>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 #undef CPL_CVSID
 #define CPL_CVSID(string)
 #include "../src/gdal/gdalrasterize.cpp"
 #include "../src/gdal/llrasterize.cpp"
 #endif
+#pragma GCC diagnostic pop
+
 #include "settingsnode.h"
 #include "settingsnode/inner.h"
 #include "settingsnode/yaml.h"
@@ -201,10 +206,9 @@ inline void Rasterization<T>::rasterize(nvector::View<T, 2>& result, Function&& 
             OGRSpatialReference* spatial_reference = inlayer->GetSpatialRef();
             if (!spatial_reference) {
                 throw std::runtime_error("could not get spatial reference");
-            } else {
-                spatial_reference->exportToWkt(&projection);
             }
-            transform = GDALCreateGenImgProjTransformer3(projection, nullptr, nullptr, geotransform);
+            spatial_reference->exportToWkt(&projection);
+            transform = GDALCreateGenImgProjTransformer3(projection, nullptr, nullptr, geotransform);  // NOLINT(hicpp-no-array-decay)
             CPLFree(projection);
         }
 
@@ -218,20 +222,20 @@ inline void Rasterization<T>::rasterize(nvector::View<T, 2>& result, Function&& 
             { infeature = inlayer->GetNextFeature(); }
             double value = func(infeature, i);
             if (!std::isnan(value)) {
-                OGRGeometry* geometry = infeature->GetGeometryRef();                                      //->SimplifyPreserveTopology(pixel_size / 16);
-                gv_rasterize_one_shape(static_cast<unsigned char*>(static_cast<void*>(&data.data()[0])),  // unsigned char *pabyChunkBuf,
-                                       0,                                                                 // int nYOff,
-                                       lon_count,                                                         // int nXSize,
-                                       lat_count,                                                         // int nYSize,
-                                       1,                                                                 // int nBands,
-                                       GDT_Float64,                                                       // GDALDataType eType,
-                                       0,                                                                 // int bAllTouched,
-                                       geometry,                                                          // OGRGeometry *poShape,
-                                       &value,                                                            // double *padfBurnValue,
-                                       GBV_UserBurnValue,                                                 // GDALBurnValueSrc eBurnValueSrc,
-                                       GRMA_Replace,                                                      // GDALRasterMergeAlg eMergeAlg,
-                                       GDALGenImgProjTransform,                                           // GDALTransformerFunc pfnTransformer,
-                                       transform                                                          // void *pTransformArg
+                OGRGeometry* geometry = infeature->GetGeometryRef();                               //->SimplifyPreserveTopology(pixel_size / 16);
+                gv_rasterize_one_shape(static_cast<unsigned char*>(static_cast<void*>(&data[0])),  // unsigned char *pabyChunkBuf,
+                                       0,                                                          // int nYOff,
+                                       lon_count,                                                  // int nXSize,
+                                       lat_count,                                                  // int nYSize,
+                                       1,                                                          // int nBands,
+                                       GDT_Float64,                                                // GDALDataType eType,
+                                       0,                                                          // int bAllTouched,
+                                       geometry,                                                   // OGRGeometry *poShape,
+                                       &value,                                                     // double *padfBurnValue,
+                                       GBV_UserBurnValue,                                          // GDALBurnValueSrc eBurnValueSrc,
+                                       GRMA_Replace,                                               // GDALRasterMergeAlg eMergeAlg,
+                                       GDALGenImgProjTransform,                                    // GDALTransformerFunc pfnTransformer,
+                                       transform                                                   // void *pTransformArg
                 );
             }
             OGRFeature::DestroyFeature(infeature);
@@ -297,7 +301,7 @@ RegionIndexRasterization<T>::RegionIndexRasterization(const settings::SettingsNo
     if (!mapping_file) {
         throw std::runtime_error("Cannot open " + filename);
     }
-    settings::SettingsNode mapping(std::unique_ptr<settings::YAML>(new settings::YAML(mapping_file)));
+    settings::SettingsNode mapping(std::make_unique<settings::YAML>(mapping_file));
     correction_map = mapping["correction_map"].to_map<std::string>();
     iso3_to_iso2 = mapping["iso3_to_iso2"].to_map<std::string>();
 }
@@ -316,7 +320,7 @@ void RegionIndexRasterization<T>::run(pipeline::Pipeline* p) {
     std::vector<bool> region_found(regions->size(), false);
     rasterize(raster, [&](OGRFeature* feature, std::size_t index) {
         (void)index;
-        std::string id = "";
+        std::string id;
         for (const auto& fieldname_l : this->fieldnames) {
             auto field_index = feature->GetFieldIndex(fieldname_l.c_str());
             if (field_index >= 0) {
@@ -340,7 +344,7 @@ void RegionIndexRasterization<T>::run(pipeline::Pipeline* p) {
         return static_cast<double>(std::distance(regions->begin(), r));
     });
     bool found = false;
-    for (int i = 0; i < regions->size(); ++i) {
+    for (std::size_t i = 0; i < regions->size(); ++i) {
         if (!region_found[i]) {
             if (!found) {
                 std::cout << "\n";

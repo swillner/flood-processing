@@ -49,15 +49,14 @@ class Rasterization : public pipeline::Module {
     void combine_fine(const nvector::View<T, 2>& fine_raster, nvector::View<T, 2>& raster);
 
   public:
-    Rasterization(const settings::SettingsNode& settings);
-    virtual void run(pipeline::Pipeline* p) override;
+    explicit Rasterization(const settings::SettingsNode& settings);
+    void run(pipeline::Pipeline* p) override;
 
-    virtual inline pipeline::ModuleDescription describe() override {
+    inline pipeline::ModuleDescription describe() override {
         if (resolution_mask_name.empty()) {
             return pipeline::ModuleDescription{"rasterization", {}, {"raster"}};
-        } else {
-            return pipeline::ModuleDescription{"rasterization", {resolution_mask_name}, {"raster"}};
         }
+        return pipeline::ModuleDescription{"rasterization", {resolution_mask_name}, {"raster"}};
     }
 };
 
@@ -78,15 +77,14 @@ class RegionIndexRasterization : public Rasterization<T> {
     std::unordered_map<std::string, std::string> iso3_to_iso2;
 
   public:
-    RegionIndexRasterization(const settings::SettingsNode& settings);
+    explicit RegionIndexRasterization(const settings::SettingsNode& settings);
     void run(pipeline::Pipeline* p) override;
 
     inline pipeline::ModuleDescription describe() override {
         if (resolution_mask_name.empty()) {
             return pipeline::ModuleDescription{"region_index_rasterization", {"regions"}, {"region_index_raster"}};
-        } else {
-            return pipeline::ModuleDescription{"region_index_rasterization", {"regions", resolution_mask_name}, {"region_index_raster"}};
         }
+        return pipeline::ModuleDescription{"region_index_rasterization", {"regions", resolution_mask_name}, {"region_index_raster"}};
     }
 };
 

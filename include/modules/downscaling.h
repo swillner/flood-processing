@@ -40,7 +40,7 @@ template<typename T>
 class Downscaling : public pipeline::Module {
   protected:
     struct Area {
-        const char* name;
+        const char* name = "\0";
         struct {
             float lon;
             float lat;
@@ -88,7 +88,8 @@ class Downscaling : public pipeline::Module {
 
     inline void coarse_to_fine(const Area& area, const nvector::View<T, 2>& coarse_flddph, nvector::Vector<T, 2>* fine_flddph);
     template<typename Function>
-    inline void fine_to_med_dx_dy(std::size_t area_size_x, bool area_has_lonlat, T* p_fine_flddph, float* lat, float* lon, int dx, int dy, Function&& func);
+    inline void fine_to_med_dx_dy(
+        std::size_t area_size_x, bool area_has_lonlat, T* p_fine_flddph, float const* lat, float const* lon, int dx, int dy, Function&& func);
     template<typename Function>
     inline void fine_to_med(Area& area, nvector::Vector<T, 2>* fine_flddph, Function&& func);
     inline void downscale(nvector::View<T, 3>& coarse_flddph,
@@ -98,7 +99,7 @@ class Downscaling : public pipeline::Module {
                           netCDF::NcVar result_fldfrc_var);
 
   public:
-    Downscaling(const settings::SettingsNode& settings);
+    explicit Downscaling(const settings::SettingsNode& settings);
     void run(pipeline::Pipeline* p) override;
 
     inline pipeline::ModuleDescription describe() override {
