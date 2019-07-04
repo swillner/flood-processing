@@ -34,7 +34,7 @@ class GEV : public distribution<T> {
     }
 
     inline bool converged() const {
-        // if false: iteration has not converge, results may be unreliable
+        // if false: iteration has not converged, results may be unreliable
         return converged_m;
     }
 
@@ -56,8 +56,6 @@ class GEV : public distribution<T> {
         static const T c3 = .01573152;
         static const T d1 = -.64363929;
         static const T d2 = .08985247;
-        static const T p8 = .8;
-        static const T p97 = .97;
         static const T small = 1e-5;
         static const T eps = 1e-6;
 
@@ -77,8 +75,8 @@ class GEV : public distribution<T> {
             }
         } else {
             g = (a0 + t3 * (a1 + t3 * (a2 + t3 * (a3 + t3 * a4)))) / (1 + t3 * (b1 + t3 * (b2 + t3 * b3)));
-            if (t3 < -p8) {
-                if (t3 <= -p97) {
+            if (t3 < -0.8) {
+                if (t3 <= -0.97) {
                     g = 1 - std::log(1 + t3) / dl2;
                 }
                 T t0 = (t3 + 3) / 2;
