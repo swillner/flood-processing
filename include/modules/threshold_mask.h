@@ -20,6 +20,7 @@
 #ifndef FLOOD_PROCESSING_THRESHOLD_MASK_H
 #define FLOOD_PROCESSING_THRESHOLD_MASK_H
 
+#include <sstream>
 #include "pipeline.h"
 #include "settingsnode.h"
 
@@ -31,46 +32,20 @@ class ThresholdMask : public pipeline::Module {
   protected:
     bool less_than;
     bool or_equal;
-    bool use_raster;
+    bool use_threshold_raster;
     T mask_value;
     T threshold;
     std::string apply_to_name;
     std::string compare_to_name;
     std::string output_name;
-    std::string raster_name;
+    std::string threshold_raster_name;
 
   public:
-    ThresholdMask(const settings::SettingsNode& settings) {
-        use_raster = settings.has("raster");
-        if (use_raster) {
-            raster_name = settings["raster"].as<std::string>();
-        } else {
-            threshold = settings["threshold"].as<T>();
-        }
-        less_than = settings.has("le_than") || settings.has("less_than");
-        or_equal = settings.has("le_than") || settings.has("ge_than");
-        if (less_than) {
-            if (or_equal) {
-                compare_to_name = settings["le_than"].as<std::string>();
-            } else {
-                compare_to_name = settings["less_than"].as<std::string>();
-            }
-        } else {
-            if (or_equal) {
-                compare_to_name = settings["ge_than"].as<std::string>();
-            } else {
-                compare_to_name = settings["greater_than"].as<std::string>();
-            }
-        }
-        apply_to_name = settings["apply_to"].as<std::string>();
-        output_name = settings["output"].as<std::string>();
-        mask_value = settings["mask_value"].as<T>();
-    }
+    ThresholdMask(const settings::SettingsNode& settings);
     void run(pipeline::Pipeline* p) override;
-
     inline pipeline::ModuleDescription describe() override {
-        if (use_raster) {
-            return pipeline::ModuleDescription{"threshold_mask", {raster_name, compare_to_name, apply_to_name}, {output_name}};
+        if (use_threshold_raster) {
+            return pipeline::ModuleDescription{"threshold_mask", {threshold_raster_name, compare_to_name, apply_to_name}, {output_name}};
         } else {
             return pipeline::ModuleDescription{"threshold_mask", {compare_to_name, apply_to_name}, {output_name}};
         }

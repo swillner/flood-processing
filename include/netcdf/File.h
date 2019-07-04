@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2017 Sven Willner <sven.willner@gmail.com>
+  Copyright (C) 2017-2019 Sven Willner <sven.willner@gmail.com>
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU Affero General Public License as published
@@ -15,23 +15,49 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef NETCDFGRIDFILE_H
-#define NETCDFGRIDFILE_H
+#ifndef NETCDF_FILE_H
+#define NETCDF_FILE_H
 
-#include <assert.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#pragma GCC diagnostic ignored "-Wpedantic"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
+#pragma warning(push)
+#pragma warning(disable : 858)
+
 #include <ncDim.h>
 #include <ncFile.h>
 #include <ncGroupAtt.h>
 #include <ncType.h>
 #include <ncVar.h>
-#include <iostream>
 #include <netcdf>
+
+#pragma warning(pop)
+
+#pragma GCC diagnostic pop
+
+#include <assert.h>
+#include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
-
 #include "nvector.h"
 
 namespace netCDF {
+
+inline bool check_dimensions(const netCDF::NcVar& var, const std::vector<std::string>& names) {
+    const auto& dims = var.getDims();
+    if (dims.size() != names.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < names.size(); ++i) {
+        if (dims[i].getName() != names[i]) {
+            return false;
+        }
+    }
+    return true;
+}
 
 template<typename T>
 struct NetCDFType {};
@@ -48,7 +74,15 @@ struct NetCDFType<std::int16_t> {
     static const netCDF::NcType::ncType type = netCDF::NcType::nc_USHORT;
 };
 template<>
+struct NetCDFType<int> {
+    static const netCDF::NcType::ncType type = netCDF::NcType::nc_INT;
+};
+template<>
 struct NetCDFType<const char*> {
+    static const netCDF::NcType::ncType type = netCDF::NcType::nc_STRING;
+};
+template<>
+struct NetCDFType<std::string> {
     static const netCDF::NcType::ncType type = netCDF::NcType::nc_STRING;
 };
 
@@ -128,7 +162,13 @@ class File : public netCDF::NcFile {
     };
 
   public:
-    File(const std::string& filename, char mode) {
+    File() = default;
+
+    File(const std::string& filename, char mode) { open(filename, mode); }
+
+    using NcFile::open;
+
+    void open(const std::string& filename, char mode) {
         switch (mode) {
             case 'r':
                 open(filename, netCDF::NcFile::read);
@@ -169,7 +209,7 @@ class File : public netCDF::NcFile {
 
     template<typename T, std::size_t dim>
     nvector::Vector<T, dim> get(const netCDF::NcVar& var) {
-        auto result = get_helper<T, 0, dim>::get(var);
+        auto result = get_helper<T, 0, dim>::reserve(var);
         var.getVar(&result.data()[0]);
         return result;
     }
@@ -238,6 +278,20 @@ class File : public netCDF::NcFile {
     template<typename T, std::size_t dim, typename... Indices>
     void set(netCDF::NcVar var, const nvector::Vector<T, dim>& data, Indices&&... indices) {
         var_set_helper<T, 0, dim>::set(var, data, std::forward<Indices>(indices)...);
+    }
+
+    template<typename T>
+    T get_attribute(const std::string& name) {
+        T res;
+        getAtt(name).getValues(res);
+        return res;
+    }
+
+    template<typename T>
+    T get_var_attribute(const netCDF::NcVar& var_p, const std::string& name) {
+        T res;
+        var_p.getAtt(name).getValues(res);
+        return res;
     }
 
     netCDF::NcDim dim(const netCDF::NcDim& dim) {

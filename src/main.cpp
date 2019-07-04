@@ -45,23 +45,17 @@ static void run(const settings::SettingsNode& settings) {
             case settings::hstring::hash("array_reader"):
                 p.register_module(new pipeline::ArrayReaderModule(m));
                 break;
-            case settings::hstring::hash("grid_reader2d"):
-                p.register_module(new pipeline::GridReader2dModule<T>(m));
+            case settings::hstring::hash("grid_reader"):
+                p.register_module(new pipeline::GridReaderModule<T>(m));
                 break;
-            case settings::hstring::hash("grid_reader3d"):
-                p.register_module(new pipeline::GridReader3dModule<T>(m));
+            case settings::hstring::hash("region_raster_grid_writer"):
+                p.register_module(new pipeline::RegionRasterGridWriterModule<T>(m));
                 break;
-            case settings::hstring::hash("region_raster_grid_writer2d"):
-                p.register_module(new pipeline::RegionRasterGridWriter2dModule<T>(m));
+            case settings::hstring::hash("time_slice"):
+                p.register_module(new pipeline::TimeSliceModule<T>(m));
                 break;
-            case settings::hstring::hash("grid3d_slice"):
-                p.register_module(new pipeline::Grid3dSliceModule<T>(m));
-                break;
-            case settings::hstring::hash("grid_writer2d"):
-                p.register_module(new pipeline::GridWriter2dModule<T>(m));
-                break;
-            case settings::hstring::hash("grid_writer3d"):
-                p.register_module(new pipeline::GridWriter3dModule<T>(m));
+            case settings::hstring::hash("grid_writer"):
+                p.register_module(new pipeline::GridWriterModule<T>(m));
                 break;
             case settings::hstring::hash("downscaling"):
                 p.register_module(new flood_processing::modules::Downscaling<T>(m));

@@ -18,7 +18,6 @@
 */
 
 #include "modules/return_periods.h"
-#include "progressbar.h"
 #include "lmoments.h"
 #include "nvector.h"
 #include "settingsnode.h"
@@ -38,10 +37,9 @@ nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& hi
     if (from_vec.empty()) {
         length = history_size;
     }
-    progressbar::ProgressBar progress(lat_count * lon_count, "Return periods");
     auto result_grid = nvector::Vector<T, 3>(std::numeric_limits<T>::quiet_NaN(), size, lat_count, lon_count);
     nvector::foreach_split_parallel<nvector::Split<true, false, false>>(
-        std::make_tuple(history_discharge, projection_discharge, result_grid),
+        nvector::collect(history_discharge, projection_discharge, result_grid),
         [&](std::size_t lat, std::size_t lon, nvector::View<T, 1>& history_series, nvector::View<T, 1>& projection_series, nvector::View<T, 1>& result_series) {
             (void)lat;
             (void)lon;
@@ -85,7 +83,6 @@ nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& hi
                     }
                 }
             }
-            ++progress;
         });
     return result_grid;
 }

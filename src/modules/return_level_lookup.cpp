@@ -18,8 +18,8 @@
 */
 
 #include "modules/return_level_lookup.h"
+#include <cmath>
 #include "nvector.h"
-#include "progressbar.h"
 
 namespace flood_processing {
 namespace modules {
@@ -32,15 +32,14 @@ void ReturnLevelLookup<T>::run(pipeline::Pipeline* p) {
     const auto lat_count = return_periods->template size<1>();
     const auto lon_count = return_periods->template size<2>();
     auto return_levels = std::make_shared<nvector::Vector<T, 3>>(std::numeric_limits<T>::quiet_NaN(), return_periods->template size<0>(), lat_count, lon_count);
-    progressbar::ProgressBar progress(lat_count * lon_count, "Return level lookup");
     nvector::foreach_split_parallel<nvector::Split<true, false, false>>(
-        std::make_tuple(*return_periods, *return_levels_mapping, *return_levels),
+        nvector::collect(*return_periods, *return_levels_mapping, *return_levels),
         [&](std::size_t lat, std::size_t lon, nvector::View<T, 1>& return_periods_l, nvector::View<T, 1>& return_levels_mapping_l,
             nvector::View<T, 1>& return_levels_l) {
             (void)lat;
             (void)lon;
             if (!std::isnan(return_periods_l(0)) && return_levels_mapping_l(0) >= 0) {
-                nvector::foreach_view(std::make_tuple(return_periods_l, return_levels_l), [&](std::size_t t, T& return_period, T& return_level) {
+                nvector::foreach_view(nvector::collect(return_periods_l, return_levels_l), [&](std::size_t t, T& return_period, T& return_level) {
                     (void)t;
                     std::size_t i;
                     for (i = 0; i < return_periods_mapping->size(); ++i) {
@@ -68,7 +67,6 @@ void ReturnLevelLookup<T>::run(pipeline::Pipeline* p) {
                     return true;
                 });
             }
-            ++progress;
         });
     p->provide<nvector::Vector<T, 3>>("return_levels", return_levels);
 }

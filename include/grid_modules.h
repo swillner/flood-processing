@@ -28,7 +28,7 @@
 
 namespace pipeline {
 
-void check_file_exists(const std::string& filename) {
+inline void check_file_exists(const std::string& filename) {
     std::ifstream infile(filename);
     if (!infile.good()) {
         throw std::runtime_error(filename + " not found");
@@ -45,7 +45,7 @@ class ArrayReaderModule : public pipeline::Module {
   public:
     ArrayReaderModule(const settings::SettingsNode& settings) {
         filename = settings["filename"].as<std::string>();
-        varname = settings["varname"].as<std::string>();
+        varname = settings["variable"].as<std::string>();
         outputname = settings["output"].as<std::string>();
         type_name = settings["type"].as<std::string>();
     }
@@ -68,80 +68,74 @@ class ArrayReaderModule : public pipeline::Module {
                 result->push_back(d);
             }
             p->provide<std::vector<double>>(outputname, result);
+        } else {
+            throw std::runtime_error("Unknown type '" + type_name + "'");
         }
     }
     inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"array_reader", {}, {outputname}}; }
 };
 
 template<typename T>
-class GridReader2dModule : public pipeline::Module {
+class GridReaderModule : public pipeline::Module {
   protected:
     std::string filename;
     std::string varname;
-    std::string outputname;
+    std::string outputgridname;
+    std::string outputtimename;
 
   public:
-    GridReader2dModule(const settings::SettingsNode& settings) {
+    GridReaderModule(const settings::SettingsNode& settings) {
         filename = settings["filename"].as<std::string>();
-        varname = settings["varname"].as<std::string>();
-        outputname = settings["output"].as<std::string>();
+        varname = settings["variable"].as<std::string>();
+        outputgridname = settings["output"]["grid"].as<std::string>("");
+        outputtimename = settings["output"]["time"].as<std::string>("");
     }
     void run(pipeline::Pipeline* p) override {
         check_file_exists(filename);
         netCDF::File file(filename, 'r');
-        p->provide<nvector::Vector<T, 2>>(outputname, std::make_shared<nvector::Vector<T, 2>>(file.get<T, 2>(varname)));
-    }
-    inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"grid_reader2d", {}, {outputname}}; }
-};
-
-template<typename T>
-class GridReader3dModule : public pipeline::Module {
-  protected:
-    std::string filename;
-    std::string varname;
-    std::string outputgridsname;
-    std::string outputdim1name;
-
-  public:
-    GridReader3dModule(const settings::SettingsNode& settings) {
-        filename = settings["filename"].as<std::string>();
-        varname = settings["varname"].as<std::string>();
-        outputgridsname = settings["output"]["grids"].as<std::string>("");
-        outputdim1name = settings["output"]["dim1"].as<std::string>("");
-    }
-    void run(pipeline::Pipeline* p) override {
-        check_file_exists(filename);
-        netCDF::File file(filename, 'r');
-        if (!outputgridsname.empty()) {
-            auto grids = std::make_shared<nvector::Vector<T, 3>>(file.get<T, 3>(varname));
-            p->provide<nvector::Vector<T, 3>>(outputgridsname, grids);
+        const auto var = file.var(varname);
+        if (!outputgridname.empty()) {
+            if (check_dimensions(var, {"time", "lat", "lon"}) || check_dimensions(var, {"time", "latitude", "longitude"})) {
+                auto grid = std::make_shared<nvector::Vector<T, 3>>(file.get<T, 3>(var));
+                p->provide<nvector::Vector<T, 3>>(outputgridname, grid);
+            } else if (check_dimensions(var, {"lat", "lon"}) || check_dimensions(var, {"latitude", "longitude"})) {
+                auto grid = file.get<T, 2>(var);
+                p->provide<nvector::Vector<T, 3>>(outputgridname,
+                                                  std::make_shared<nvector::Vector<T, 3>>(grid.data(), 1, grid.template size<0>(), grid.template size<1>()));
+            } else {
+                throw std::runtime_error(filename + " - " + varname + ": Unexpected dimensions");
+            }
         }
-        if (!outputdim1name.empty()) {
-            auto dim1 = std::make_shared<netCDF::DimVar<double>>(file.dimvar<double>(file.var(varname).getDim(0)));
-            p->provide<netCDF::DimVar<double>>(outputdim1name, dim1);
+        if (!outputtimename.empty()) {
+            if (check_dimensions(var, {"time", "lat", "lon"}) || check_dimensions(var, {"time", "latitude", "longitude"})) {
+                auto time = std::make_shared<netCDF::DimVar<double>>(file.dimvar<double>(var.getDim(0)));
+                p->provide<netCDF::DimVar<double>>(outputtimename, time);
+            } else {
+                throw std::runtime_error(filename + " - " + varname + ": Unexpected dimensions");
+            }
         }
     }
     inline pipeline::ModuleDescription describe() override {
         std::vector<std::string> outputs;
-        if (!outputgridsname.empty()) {
-            outputs.push_back(outputgridsname);
+        if (!outputgridname.empty()) {
+            outputs.push_back(outputgridname);
         }
-        if (!outputdim1name.empty()) {
-            outputs.push_back(outputdim1name);
+        if (!outputtimename.empty()) {
+            outputs.push_back(outputtimename);
         }
-        return pipeline::ModuleDescription{"grid_reader3d", {}, outputs};
+        return pipeline::ModuleDescription{"grid_reader", {}, outputs};
     }
 };
 
 template<typename T>
-class Grid3dSliceModule : public pipeline::Module {
+class TimeSliceModule : public pipeline::Module {
   protected:
     std::string inputname;
     std::string outputname;
     std::size_t i;
 
   public:
-    Grid3dSliceModule(const settings::SettingsNode& settings) {
+    TimeSliceModule(const settings::SettingsNode& settings) {
         inputname = settings["inputname"].as<std::string>();
         outputname = settings["outputname"].as<std::string>();
         i = settings["index"].as<std::size_t>();
@@ -149,51 +143,77 @@ class Grid3dSliceModule : public pipeline::Module {
     void run(pipeline::Pipeline* p) override {
         auto input = p->consume<nvector::Vector<T, 3>>(inputname);
         auto grid = input->template split<nvector::Split<false, true, true>>().at(i);
-        auto output = std::make_shared<nvector::Vector<T, 2>>(0, grid.template size<0>(), grid.template size<1>());
+        auto output = std::make_shared<nvector::Vector<T, 3>>(0, 1, grid.template size<0>(), grid.template size<1>());
         std::copy(grid.begin(), grid.end(), output->begin());
-        p->provide<nvector::Vector<T, 2>>(outputname, output);
+        p->provide<nvector::Vector<T, 3>>(outputname, output);
     }
-    inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"grid3d_slice", {inputname}, {outputname}}; }
+    inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"time_slice", {inputname}, {outputname}}; }
 };
 
 template<typename T>
-class GridWriter2dModule : public pipeline::Module {
+class GridWriterModule : public pipeline::Module {
   protected:
     std::string filename;
     std::string varname;
-    std::string inputname;
+    std::string inputgridname;
+    std::string inputtimename;
 
   public:
-    GridWriter2dModule(const settings::SettingsNode& settings) {
+    GridWriterModule(const settings::SettingsNode& settings) {
         filename = settings["filename"].as<std::string>();
-        varname = settings["varname"].as<std::string>();
-        inputname = settings["input"].as<std::string>();
+        varname = settings["variable"].as<std::string>();
+        inputgridname = settings["input"]["grid"].as<std::string>();
+        inputtimename = settings["input"]["time"].as<std::string>("");
     }
     void run(pipeline::Pipeline* p) override {
-        auto data = p->consume<nvector::Vector<T, 2>>(inputname);
+        auto grid = p->consume<nvector::Vector<T, 3>>(inputgridname);
         netCDF::File file(filename, 'w');
-        file.set<T>(file.var<T>(varname, {file.lat(data->template size<0>()), file.lon(data->template size<1>())}), *data);
+        if (inputtimename.empty()) {
+            if (grid->template size<0>() != 1) {
+                throw std::runtime_error("Only 2d input grid supported");
+            }
+            auto var = file.var<T>(varname, {file.lat(grid->template size<1>()), file.lon(grid->template size<2>())});
+            file.set<T>(var, *grid);
+        } else {
+            auto time = p->consume<netCDF::DimVar<double>>(inputtimename);
+            if (grid->template size<0>() != time->size()) {
+                throw std::runtime_error("Sizes do not match: " + inputgridname + " and " + inputtimename);
+            }
+            auto var = file.var<T>(varname, {file.dimvar(*time), file.lat(grid->template size<1>()), file.lon(grid->template size<2>())});
+            file.set<T>(var, *grid);
+        }
     }
-    inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"grid_writer2d", {inputname}, {}}; }
+    inline pipeline::ModuleDescription describe() override {
+        if (inputtimename.empty()) {
+            return pipeline::ModuleDescription{"grid_writer", {inputgridname}, {}};
+        } else {
+            return pipeline::ModuleDescription{"grid_writer", {inputgridname, inputtimename}, {}};
+        }
+    }
 };
 
 template<typename T>
-class RegionRasterGridWriter2dModule : public GridWriter2dModule<T> {
+class RegionRasterGridWriterModule : public GridWriterModule<T> {
   protected:
-    using GridWriter2dModule<T>::filename;
-    using GridWriter2dModule<T>::inputname;
-    using GridWriter2dModule<T>::varname;
+    using GridWriterModule<T>::filename;
+    using GridWriterModule<T>::inputgridname;
+    using GridWriterModule<T>::varname;
     std::string regionvarname;
+    std::string inputregionsname;
 
   public:
-    RegionRasterGridWriter2dModule(const settings::SettingsNode& settings) : GridWriter2dModule<T>(settings) {
-        regionvarname = settings["regionvarname"].as<std::string>();
+    RegionRasterGridWriterModule(const settings::SettingsNode& settings) : GridWriterModule<T>(settings) {
+        regionvarname = settings["region_variable"].as<std::string>();
+        inputregionsname = settings["input"]["regions"].as<std::string>();
     }
     void run(pipeline::Pipeline* p) override {
-        auto regions = p->consume<std::vector<std::string>>("regions");
-        auto data = p->consume<nvector::Vector<T, 2>>(inputname);
+        auto regions = p->consume<std::vector<std::string>>(inputregionsname);
+        auto data = p->consume<nvector::Vector<T, 3>>(inputgridname);
+        if (data->template size<0>() != 1) {
+            throw std::runtime_error("Only 2d input grid supported");
+        }
         netCDF::File file(filename, 'w');
-        file.set<T>(file.var<T>(varname, {file.lat(data->template size<0>()), file.lon(data->template size<1>())}), *data);
+        file.set<T>(file.var<T>(varname, {file.lat(data->template size<1>()), file.lon(data->template size<2>())}), *data);
         std::vector<const char*> regions_char;
         regions_char.reserve(regions->size());
         for (const auto& r : *regions) {
@@ -201,35 +221,9 @@ class RegionRasterGridWriter2dModule : public GridWriter2dModule<T> {
         }
         file.set<const char*>(file.var<const char*>(regionvarname, {file.addDim(regionvarname, regions->size())}), regions_char);
     }
-    inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"region_raster_grid_writer2d", {inputname, "regions"}, {}}; }
-};
-
-template<typename T>
-class GridWriter3dModule : public pipeline::Module {
-  protected:
-    std::string filename;
-    std::string varname;
-    std::string inputgridsname;
-    std::string inputdim1name;
-
-  public:
-    GridWriter3dModule(const settings::SettingsNode& settings) {
-        filename = settings["filename"].as<std::string>();
-        varname = settings["varname"].as<std::string>();
-        inputgridsname = settings["input"]["grids"].as<std::string>();
-        inputdim1name = settings["input"]["dim1"].as<std::string>();
+    inline pipeline::ModuleDescription describe() override {
+        return pipeline::ModuleDescription{"region_raster_grid_writer", {inputgridname, inputregionsname}, {}};
     }
-    void run(pipeline::Pipeline* p) override {
-        auto grids = p->consume<nvector::Vector<T, 3>>(inputgridsname);
-        auto dim1 = p->consume<netCDF::DimVar<double>>(inputdim1name);
-        netCDF::File file(filename, 'w');
-        if (grids->template size<0>() != dim1->size()) {
-            throw std::runtime_error("Sizes do not match: " + inputgridsname + " and " + inputdim1name);
-        }
-        netCDF::NcVar var = file.var<T>(varname, {file.dimvar(*dim1), file.lat(grids->template size<1>()), file.lon(grids->template size<2>())});
-        file.set<T>(var, *grids);
-    }
-    inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"grid_writer3d", {inputgridsname, inputdim1name}, {}}; }
 };
 
 }  // namespace pipeline

@@ -129,7 +129,7 @@ inline void Rasterization<T>::advance(nvector::View<T, 2>& result, std::size_t m
     for (std::size_t i = 0; i < max_advance; ++i) {
         std::copy(std::begin(result), std::end(result), std::begin(last));
         bool found = false;
-        foreach_view_parallel(std::make_tuple(result, last), [&](std::size_t lat, std::size_t lon, T& n, const T& l) {
+        foreach_view_parallel(nvector::collect(result, last), [&](std::size_t lat, std::size_t lon, T& n, const T& l) {
             if (std::isnan(l)) {
                 std::vector<T> neighbours;
                 if (lon > 0) {
@@ -311,9 +311,10 @@ void RegionIndexRasterization<T>::run(pipeline::Pipeline* p) {
         xres = resolution_mask->template size<0>();
         yres = resolution_mask->template size<1>();
     }
-    auto raster = std::make_shared<nvector::Vector<T, 2>>(std::numeric_limits<T>::quiet_NaN(), xres, yres);
+    auto raster_raw = std::make_shared<nvector::Vector<T, 3>>(std::numeric_limits<T>::quiet_NaN(), 1, xres, yres);
+    auto raster = raster_raw->template split<nvector::Split<false, true, true>>().at(0);
     std::vector<bool> region_found(regions->size(), false);
-    rasterize(*raster, [&](OGRFeature* feature, std::size_t index) {
+    rasterize(raster, [&](OGRFeature* feature, std::size_t index) {
         (void)index;
         std::string id = "";
         for (const auto& fieldname_l : this->fieldnames) {
@@ -352,9 +353,9 @@ void RegionIndexRasterization<T>::run(pipeline::Pipeline* p) {
         std::cout << std::endl;
     }
     if (max_advance > 0) {
-        advance(*raster, max_advance);
+        advance(raster, max_advance);
     }
-    p->provide<nvector::Vector<T, 2>>("region_index_raster", raster);
+    p->provide<nvector::Vector<T, 3>>("region_index_raster", raster_raw);
 #endif
 }
 

@@ -29,6 +29,8 @@
 namespace flood_processing {
 namespace modules {
 
+// TODO: make input names controllable in settings
+
 template<typename T>
 class SumPerRegion : public pipeline::Module {
   protected:
