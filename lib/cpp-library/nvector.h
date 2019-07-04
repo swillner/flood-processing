@@ -14,6 +14,16 @@ namespace nvector {
 
 struct Slice;
 
+template<typename... Args>
+inline std::tuple<const Args&...> collect(const Args&... args) {
+    return std::tuple<const Args&...>(args...);
+}
+
+template<typename... Args>
+inline std::tuple<Args&...> collect(Args&... args) {
+    return std::tuple<Args&...>(args...);
+}
+
 namespace detail {
 
 inline int multiply_all() { return 1; }
@@ -185,11 +195,11 @@ struct foreach_helper {
 
 template<typename Function, typename... Args>
 inline bool foreach_split_helper(Function&& func, Args&&... splits) {
-    return foreach_iterator(func, std::make_tuple(splits...), std::begin(splits)...);
+    return foreach_iterator(func, collect(splits...), std::begin(splits)...);
 }
 template<typename Function, typename... Args>
 inline void foreach_split_helper_parallel(Function&& func, Args&&... splits) {
-    foreach_iterator_parallel(func, std::make_tuple(splits...), std::begin(splits)...);
+    foreach_iterator_parallel(func, collect(splits...), std::begin(splits)...);
 }
 
 template<std::size_t n, typename... Args>
@@ -236,6 +246,8 @@ struct Slice {
     int begin = 0;
     std::size_t size = 0;
     int stride = 1;
+    Slice(int begin_p, std::size_t size_p, int stride_p) : begin(begin_p), size(size_p), stride(stride_p) {}
+    Slice() = default;
 };
 
 template<typename T, std::size_t dim, class Iterator = typename std::vector<T>::iterator, typename Tref = typename std::add_lvalue_reference<T>::type>
@@ -321,7 +333,7 @@ class View {
         std::size_t total_index;
         std::size_t end_index;
         const_iterator(){};
-        const_iterator(View* view_p, std::array<std::size_t, dim> pos_p, std::size_t total_index_p, std::size_t end_index_p)
+        const_iterator(View const* view_p, std::array<std::size_t, dim> pos_p, std::size_t total_index_p, std::size_t end_index_p)
             : view(view_p), pos_m(pos_p), total_index(total_index_p), end_index(end_index_p){};
 
       public:
@@ -627,6 +639,17 @@ class Vector : public View<T, dim, typename Storage::iterator> {
     }
 
     template<typename... Args>
+    Vector(Storage data_p, Args&&... args) : data_m(std::move(data_p)) {
+        this->template initialize_sizes<0>(std::forward<Args>(args)...);
+        std::cout << detail::multiply_all(std::forward<Args>(args)...) << std::endl;
+        std::cout << data_m.size() << std::endl;
+        if (detail::multiply_all(std::forward<Args>(args)...) != data_m.size()) {
+            throw std::runtime_error("wrong size of underlying data");
+        }
+        it = std::begin(data_m);
+    }
+
+    template<typename... Args>
     void resize(const T& initial_value, Args&&... args) {
         this->template initialize_sizes<0>(std::forward<Args>(args)...);
         data_m.resize(detail::multiply_all(std::forward<Args>(args)...), initial_value);
@@ -657,16 +680,6 @@ inline bool foreach_split(const std::tuple<Args...>& views, Function&& func) {
 template<typename Splittype, typename... Args, typename Function>
 inline void foreach_split_parallel(const std::tuple<Args...>& views, Function&& func) {
     detail::foreach_helper<0, sizeof...(Args), Args...>::template foreach_split_parallel<Function, Splittype>(std::forward<Function>(func), views);
-}
-
-template<typename... Args>
-inline std::tuple<const Args&...> const_views(const Args&... args) {
-    return std::tuple<const Args&...>(args...);
-}
-
-template<typename... Args>
-inline std::tuple<Args&...> collect_views(Args&... args) {
-    return std::tuple<Args&...>(args...);
 }
 
 }  // namespace nvector
