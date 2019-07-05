@@ -43,7 +43,7 @@ nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& hi
         [&](std::size_t lat, std::size_t lon, nvector::View<T, 1>& history_series, nvector::View<T, 1>& projection_series, nvector::View<T, 1>& result_series) {
             (void)lat;
             (void)lon;
-            if (history_series(0) >= 0 && history_series(0) < 1e10 && !std::isnan(history_series(0))) {
+            if (history_series(0) >= 0 && !std::isnan(history_series(0))) {
                 try {
                     std::vector<T> view(length);
                     if (from_vec.empty()) {

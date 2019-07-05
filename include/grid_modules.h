@@ -18,7 +18,9 @@
 #ifndef GRID_MODULES_H
 #define GRID_MODULES_H
 
+#include <cmath>
 #include <fstream>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 #include "netcdf/File.h"
@@ -87,11 +89,35 @@ class GridReaderModule : public pipeline::Module {
         netCDF::File file(filename, 'r');
         const auto var = file.var(varname);
         if (!outputgridname.empty()) {
+            bool fill_mode;
+            T fill_value;
+            var.getFillModeParameters(fill_mode, &fill_value);
             if (check_dimensions(var, {"time", "lat", "lon"}) || check_dimensions(var, {"time", "latitude", "longitude"})) {
                 auto grid = std::make_shared<nvector::Vector<T, 3>>(file.get<T, 3>(var));
+                if (fill_mode && !std::isnan(fill_value)) {
+                    nvector::foreach_view_parallel(nvector::collect(*grid), [&](std::size_t t, std::size_t lat, std::size_t lon, T& v) {
+                        (void)t;
+                        (void)lat;
+                        (void)lon;
+                        if (v == fill_value) {
+                            v = std::numeric_limits<T>::quiet_NaN();
+                        }
+                        return true;
+                    });
+                }
                 p->provide<nvector::Vector<T, 3>>(outputgridname, grid);
             } else if (check_dimensions(var, {"lat", "lon"}) || check_dimensions(var, {"latitude", "longitude"})) {
                 auto grid = file.get<T, 2>(var);
+                if (fill_mode && !std::isnan(fill_value)) {
+                    nvector::foreach_view_parallel(nvector::collect(grid), [&](std::size_t lat, std::size_t lon, T& v) {
+                        (void)lat;
+                        (void)lon;
+                        if (v == fill_value) {
+                            v = std::numeric_limits<T>::quiet_NaN();
+                        }
+                        return true;
+                    });
+                }
                 p->provide<nvector::Vector<T, 3>>(outputgridname,
                                                   std::make_shared<nvector::Vector<T, 3>>(grid.data(), 1, grid.template size<0>(), grid.template size<1>()));
             } else {
