@@ -27,12 +27,9 @@ namespace modules {
 template<typename T>
 ThresholdMask<T>::ThresholdMask(const settings::SettingsNode& settings) {
     const auto threshold_string = settings["threshold"].as<std::string>();
-    std::cout << "threshold_string: " << threshold_string << std::endl;
     std::istringstream ss(threshold_string);
     ss >> std::noskipws >> threshold;
-    std::cout << "threshold: " << threshold << std::endl;
     use_threshold_raster = !ss.eof() || ss.fail();
-    std::cout << "use_threshold_raster: " << use_threshold_raster << std::endl;
     if (use_threshold_raster) {
         threshold_raster_name = threshold_string;
     }

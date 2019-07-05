@@ -45,7 +45,7 @@ class SumPerRegion : public pipeline::Module {
         outputname = settings["outputname"].as<std::string>();
         filename = settings["filename"].as<std::string>("");
         if (!filename.empty()) {
-            varname = settings["varname"].as<std::string>();
+            varname = settings["variable"].as<std::string>();
         } else {
             inputname = settings["inputname"].as<std::string>();
         }
@@ -73,9 +73,9 @@ class PerRegionWriter2d : public pipeline::Module {
     explicit PerRegionWriter2d(const settings::SettingsNode& settings) {
         filename = settings["filename"].as<std::string>();
         inputarrayname = settings["input"]["array"].as<std::string>();
-        inputdim1name = settings["input"]["dim1"].as<std::string>();
+        inputdim1name = settings["input"]["time"].as<std::string>();
         regionvarname = settings["regionvarname"].as<std::string>();
-        varname = settings["varname"].as<std::string>();
+        varname = settings["variable"].as<std::string>();
     }
     void run(pipeline::Pipeline* p) override {
         auto regions = p->consume<std::vector<std::string>>("regions");

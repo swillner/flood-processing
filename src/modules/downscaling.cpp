@@ -152,9 +152,9 @@ template<typename T>
 Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
     map_path = settings["map_path"].as<std::string>();
     flddph_filename = settings["downscaled_flood_depth"]["filename"].as<std::string>();
-    flddph_varname = settings["downscaled_flood_depth"]["varname"].as<std::string>();
+    flddph_varname = settings["downscaled_flood_depth"]["variable"].as<std::string>();
     fldfrc_filename = settings["downscaled_flood_fraction"]["filename"].as<std::string>();
-    fldfrc_varname = settings["downscaled_flood_fraction"]["varname"].as<std::string>();
+    fldfrc_varname = settings["downscaled_flood_fraction"]["variable"].as<std::string>();
 
     if (settings.has("input")) {
         projection_times_name = settings["input"]["times"].as<std::string>("projection_times");
