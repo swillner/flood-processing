@@ -34,25 +34,29 @@ void ReturnLevelLookup<T>::run(pipeline::Pipeline* p) {
     auto return_levels = std::make_shared<nvector::Vector<T, 3>>(std::numeric_limits<T>::quiet_NaN(), return_periods->template size<0>(), lat_count, lon_count);
     nvector::foreach_split_parallel<nvector::Split<true, false, false>>(
         nvector::collect(*return_periods, *return_levels_mapping, *return_levels),
-        [&](std::size_t lat, std::size_t lon, nvector::View<T, 1>& return_periods_l, nvector::View<T, 1>& return_levels_mapping_l,
+        [&](std::size_t lat, std::size_t lon, const nvector::View<T, 1>& return_periods_l, const nvector::View<T, 1>& return_levels_mapping_l,
             nvector::View<T, 1>& return_levels_l) {
             (void)lat;
             (void)lon;
-            if (!std::isnan(return_periods_l(0)) && return_levels_mapping_l(0) >= 0) {
-                nvector::foreach_view(nvector::collect(return_periods_l, return_levels_l), [&](std::size_t t, T& return_period, T& return_level) {
+            if (!std::isnan(return_levels_mapping_l(0))) {
+                nvector::foreach_view(nvector::collect(return_periods_l, return_levels_l), [&](std::size_t t, T return_period, T& return_level) {
                     (void)t;
+                    if (std::isnan(return_period)) {
+                        return true;
+                    }
                     std::size_t i;
                     for (i = 0; i < return_periods_mapping->size(); ++i) {
-                        if (return_period < (*return_periods_mapping)[i]) {
+                        if (return_period <= (*return_periods_mapping)[i]) {
                             break;
                         }
                     }
                     if (interpolate) {
                         if (i == 0) {
-                            T part = return_period / (*return_periods_mapping)[i];
+                            const T part = return_period / (*return_periods_mapping)[i];
                             return_level = part * return_levels_mapping_l(i);
                         } else if (i < return_periods_mapping->size()) {
-                            T part = (return_period - (*return_periods_mapping)[i - 1]) / ((*return_periods_mapping)[i] - (*return_periods_mapping)[i - 1]);
+                            const T part =
+                                (return_period - (*return_periods_mapping)[i - 1]) / ((*return_periods_mapping)[i] - (*return_periods_mapping)[i - 1]);
                             return_level = part * return_levels_mapping_l(i) + (1 - part) * return_levels_mapping_l(i - 1);
                         } else {
                             return_level = return_levels_mapping_l(i - 1);

@@ -18,6 +18,8 @@
 */
 
 #include "modules/return_periods.h"
+#include <algorithm>
+#include <cmath>
 #include "lmoments.h"
 #include "nvector.h"
 #include "settingsnode.h"
@@ -44,24 +46,24 @@ nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& hi
             nvector::View<T, 1>& result_series) {
             (void)lat;
             (void)lon;
-            if (!std::isnan(history_series(0))) {
-                try {
-                    std::vector<T> view(length);
-                    if (from_vec.empty()) {
-                        std::partial_sort_copy(std::begin(history_series), std::end(history_series), std::begin(view), std::end(view));
-                    } else {
-                        std::size_t offset = 0;
-                        for (std::size_t i = 0; i < from_vec.size(); ++i) {
-                            const auto from = from_vec[i];
-                            const auto to = to_vec[i];
-                            if (to >= history_size) {
-                                throw std::runtime_error("return period parameters invalid");
-                            }
-                            std::copy(std::begin(history_series) + from, std::begin(history_series) + (to + 1), std::begin(view) + offset);
-                            offset += to - from + 1;
+            try {
+                std::vector<T> view(length);
+                if (from_vec.empty()) {
+                    std::partial_sort_copy(std::begin(history_series), std::end(history_series), std::begin(view), std::end(view));
+                } else {
+                    std::size_t offset = 0;
+                    for (std::size_t i = 0; i < from_vec.size(); ++i) {
+                        const auto from = from_vec[i];
+                        const auto to = to_vec[i];
+                        if (to >= history_size) {
+                            throw std::runtime_error("return period parameters invalid");
                         }
-                        std::sort(std::begin(view), std::end(view));
+                        std::copy(std::begin(history_series) + from, std::begin(history_series) + (to + 1), std::begin(view) + offset);
+                        offset += to - from + 1;
                     }
+                    std::sort(std::begin(view), std::end(view));
+                }
+                if (std::none_of(std::begin(view), std::end(view), [](T v) { return std::isnan(v); })) {
                     std::unique_ptr<lmoments::distribution<T>> d;
                     switch (distribution) {
                         case Distribution::GEV:
@@ -78,11 +80,11 @@ nvector::Vector<T, 3> ReturnPeriods<T>::return_periods(nvector::Vector<T, 3>& hi
                         }
                         result_series(i) = return_period;
                     }
-                } catch (std::invalid_argument&) {
-                    for (std::size_t i = 0; i < size; ++i) {
-                        result_series(i) = 0;
-                    }
                 }
+            } catch (std::invalid_argument&) {
+                // for (std::size_t i = 0; i < size; ++i) {
+                //     result_series(i) = 0;
+                // }
             }
         });
     return result_grid;
