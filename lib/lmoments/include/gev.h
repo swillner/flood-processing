@@ -77,7 +77,7 @@ class GEV : public distribution<T> {
             g = (a0 + t3 * (a1 + t3 * (a2 + t3 * (a3 + t3 * a4)))) / (1 + t3 * (b1 + t3 * (b2 + t3 * b3)));
             if (t3 < -0.8) {
                 if (t3 <= -0.97) {
-                    g = 1 - std::log(1 + t3) / dl2;  // TODO check std::log1p(t3) instead
+                    g = 1 - std::log1p(t3) / dl2;
                 }
                 T t0 = (t3 + 3) / 2;
                 converged_m = false;
