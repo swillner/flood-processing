@@ -72,6 +72,7 @@ class ArrayReaderModule : public pipeline::Module {
 template<typename T>
 class GridReaderModule : public pipeline::Module {
   protected:
+    std::size_t generic;
     std::string filename;
     std::string varname;
     std::string outputgridname;
@@ -81,6 +82,7 @@ class GridReaderModule : public pipeline::Module {
     explicit GridReaderModule(const settings::SettingsNode& settings) {
         filename = settings["filename"].as<std::string>();
         varname = settings["variable"].as<std::string>();
+        generic = settings["generic"].as<std::size_t>(0);
         outputgridname = settings["output"]["grid"].as<std::string>("");
         outputtimename = settings["output"]["time"].as<std::string>("");
     }
@@ -92,7 +94,7 @@ class GridReaderModule : public pipeline::Module {
             bool fill_mode;
             T fill_value;
             var.getFillModeParameters(fill_mode, &fill_value);
-            if (check_dimensions(var, {"time", "lat", "lon"}) || check_dimensions(var, {"time", "latitude", "longitude"})) {
+            if (generic == 3 || check_dimensions(var, {"time", "lat", "lon"}) || check_dimensions(var, {"time", "latitude", "longitude"})) {
                 auto grid = std::make_shared<nvector::Vector<T, 3>>(file.get<T, 3>(var));
                 if (fill_mode && !std::isnan(fill_value)) {
                     nvector::foreach_view_parallel(nvector::collect(*grid), [&](std::size_t t, std::size_t lat, std::size_t lon, T& v) {
@@ -106,7 +108,7 @@ class GridReaderModule : public pipeline::Module {
                     });
                 }
                 p->provide<nvector::Vector<T, 3>>(outputgridname, grid);
-            } else if (check_dimensions(var, {"lat", "lon"}) || check_dimensions(var, {"latitude", "longitude"})) {
+            } else if (generic == 2 || check_dimensions(var, {"lat", "lon"}) || check_dimensions(var, {"latitude", "longitude"})) {
                 auto grid = file.get<T, 2>(var);
                 if (fill_mode && !std::isnan(fill_value)) {
                     nvector::foreach_view_parallel(nvector::collect(grid), [&](std::size_t lat, std::size_t lon, T& v) {
@@ -125,7 +127,7 @@ class GridReaderModule : public pipeline::Module {
             }
         }
         if (!outputtimename.empty()) {
-            if (check_dimensions(var, {"time", "lat", "lon"}) || check_dimensions(var, {"time", "latitude", "longitude"})) {
+            if (generic == 2 || generic == 3 || check_dimensions(var, {"time", "lat", "lon"}) || check_dimensions(var, {"time", "latitude", "longitude"})) {
                 auto time = std::make_shared<netCDF::DimVar<double>>(file.dimvar<double>(var.getDim(0)));
                 p->provide<netCDF::DimVar<double>>(outputtimename, time);
             } else {
