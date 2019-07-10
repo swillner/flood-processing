@@ -75,7 +75,7 @@ inline void close_mmapped_file(T* p, std::size_t size, int fd) {
     close(fd);
 }
 
-template<typename T>
+template<typename T = char>
 class MMappedFile {
   protected:
     int fd = 0;
