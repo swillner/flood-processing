@@ -21,6 +21,7 @@
 #define FLOOD_PROCESSING_DOWNSCALING_H
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <tuple>
 #include "FortranGrid.h"
@@ -49,24 +50,18 @@ class Downscaling : public pipeline::Module {
             std::size_t x;
             std::size_t y;
         } size;
-        std::unique_ptr<FortranGrid<int>> grid;
+        std::unique_ptr<FortranGrid<std::int16_t>> grid;
         std::unique_ptr<FortranGrid<float>> flddif;
-        std::unique_ptr<FortranGrid<float>> lonlat;
     };
-    std::array<Area, 13> areas = std::array<Area, 13>{
-        Area{"sa1", {-85, 15}, {11000, 15000}, nullptr, nullptr, nullptr},
-        Area{"ca1", {-120, 40}, {12000, 7000}, nullptr, nullptr, nullptr},
-        Area{"na1", {-130, 60}, {16000, 7000}, nullptr, nullptr, nullptr},
-        Area{"af1", {5, 35}, {11000, 14000}, nullptr, nullptr, nullptr},
-        Area{"eu1", {-20, 60}, {8000, 12000}, nullptr, nullptr, nullptr},
-        Area{"eu2", {5, 60}, {13000, 8000}, nullptr, nullptr, nullptr},
-        Area{"as1", {55, 60}, {9000, 11000}, nullptr, nullptr, nullptr},
-        Area{"as2", {90, 60}, {12000, 8000}, nullptr, nullptr, nullptr},
-        Area{"as3", {90, 35}, {13000, 10000}, nullptr, nullptr, nullptr},
-        Area{"oc1", {110, -10}, {14000, 8000}, nullptr, nullptr, nullptr},
-        Area{"as4", {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN()}, {10256, 10263}, nullptr, nullptr, nullptr},
-        Area{"na2", {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN()}, {9102, 8384}, nullptr, nullptr, nullptr},
-        Area{"eu3", {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN()}, {6888, 7385}, nullptr, nullptr, nullptr}};
+    std::array<Area, 14> areas{
+        Area{"sa1", {-85, 15}, {11000, 15000}, nullptr, nullptr}, Area{"ca1", {-120, 40}, {12000, 7000}, nullptr, nullptr},
+        Area{"na1", {-130, 60}, {16000, 7000}, nullptr, nullptr}, Area{"af1", {5, 35}, {11000, 14000}, nullptr, nullptr},
+        Area{"eu1", {-20, 60}, {8000, 12000}, nullptr, nullptr},  Area{"eu2", {5, 60}, {13000, 8000}, nullptr, nullptr},
+        Area{"as1", {55, 60}, {9000, 11000}, nullptr, nullptr},   Area{"as2", {90, 60}, {12000, 8000}, nullptr, nullptr},
+        Area{"as3", {90, 35}, {13000, 10000}, nullptr, nullptr},  Area{"oc1", {110, -10}, {14000, 8000}, nullptr, nullptr},
+        Area{"na2", {-170, 75}, {23000, 5000}, nullptr, nullptr}, Area{"eu3", {0, 80}, {14000, 7000}, nullptr, nullptr},
+        Area{"si1", {55, 80}, {12000, 7000}, nullptr, nullptr},   Area{"si2", {100, 75}, {19000, 5000}, nullptr, nullptr},
+    };
     std::size_t target_lon_count;
     std::size_t target_lat_count;
     const std::size_t coarse_lon_count = 1440;
@@ -86,17 +81,16 @@ class Downscaling : public pipeline::Module {
     int from_lat, to_lat;
     int from_lon, to_lon;
 
-    inline void coarse_to_fine(const Area& area, const nvector::View<T, 2>& coarse_flddph, nvector::Vector<T, 2>* fine_flddph);
+    void coarse_to_fine(const Area& area, const nvector::View<T, 2>& coarse_flddph, nvector::Vector<T, 2>* fine_flddph) const;
     template<typename Function>
-    inline void fine_to_med_dx_dy(
-        std::size_t area_size_x, bool area_has_lonlat, T* p_fine_flddph, float const* lat, float const* lon, int dx, int dy, Function&& func);
+    constexpr void fine_to_med_dx_dy(std::size_t area_size_x, T* p_fine_flddph, float lat, float lon, int dx, int dy, Function&& func) const;
     template<typename Function>
-    inline void fine_to_med(Area& area, nvector::Vector<T, 2>* fine_flddph, Function&& func);
-    inline void downscale(nvector::View<T, 3>& coarse_flddph,
-                          netCDF::File& result_flddph,
-                          netCDF::NcVar result_flddph_var,
-                          netCDF::File& result_fldfrc,
-                          netCDF::NcVar result_fldfrc_var);
+    void fine_to_med(const Area& area, nvector::Vector<T, 2>* fine_flddph, Function&& func);
+    void downscale(const nvector::View<T, 3>& timed_flddph,
+                   netCDF::File& result_flddph,
+                   netCDF::NcVar result_flddph_var,
+                   netCDF::File& result_fldfrc,
+                   netCDF::NcVar result_fldfrc_var);
 
   public:
     explicit Downscaling(const settings::SettingsNode& settings);

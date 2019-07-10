@@ -91,8 +91,8 @@ class FortranGrid {
 
     const T& operator()(const std::size_t& lon, const std::size_t& lat) const noexcept { return data[lat * lon_count_ + lon]; }
 
-    const std::size_t& lat_count() const { return lat_count_; }
-    const std::size_t& lon_count() const { return lon_count_; }
+    constexpr std::size_t lat_count() const { return lat_count_; }
+    constexpr std::size_t lon_count() const { return lon_count_; }
 };
 
 #endif
