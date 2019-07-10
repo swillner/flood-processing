@@ -76,8 +76,8 @@ class Downscaling : public pipeline::Module {
     std::size_t inverse_target_cell_size;
     std::string projection_times_name;
     std::string return_levels_name;
-    int from_lat, to_lat;
-    int from_lon, to_lon;
+    float from_lat, to_lat;
+    float from_lon, to_lon;
 
     nvector::Vector<T, 2> coarse_to_fine(const Area& area, const nvector::View<T, 2>& coarse_flddph) const;
     template<typename Function>

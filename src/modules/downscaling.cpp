@@ -140,10 +140,10 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
         }
     }
 
-    from_lat = settings["from_lat"].as<int>(-90);
-    to_lat = settings["to_lat"].as<int>(90);
-    from_lon = settings["from_lon"].as<int>(-180);
-    to_lon = settings["to_lon"].as<int>(180);
+    from_lat = settings["from_lat"].as<float>(-90);
+    to_lat = settings["to_lat"].as<float>(90);
+    from_lon = settings["from_lon"].as<float>(-180);
+    to_lon = settings["to_lon"].as<float>(180);
     if (from_lat < -90) {
         throw std::runtime_error("invalid from_lat");
     }
