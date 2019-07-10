@@ -18,7 +18,7 @@
 */
 
 #include "modules/downscaling.h"
-#include "FortranGrid.h"
+#include "mmappedfile.h"
 #include "netcdf/File.h"
 #include "progressbar.h"
 
@@ -26,29 +26,32 @@ namespace flood_processing {
 namespace modules {
 
 template<typename T>
-void Downscaling<T>::coarse_to_fine(const Area& area, const nvector::View<T, 2>& coarse_flddph, nvector::Vector<T, 2>* fine_flddph) const {
-    const auto fine_gridsize = area.size.x * area.size.y;
-    const std::int16_t* x = *area.grid;
-    const std::int16_t* y = &x[fine_gridsize];
-    const float* dif = *area.flddif;
-    T* p_fine_flddph = &fine_flddph->data()[0];
-#pragma omp parallel for default(shared)
-    for (std::size_t i = 0; i < fine_gridsize; ++i) {
-        const auto x_i = x[i];
-        if (x_i > 0) {
-            const auto d = coarse_flddph(y[i] - 1, x_i - 1);
-            if (std::isnan(d)) {
-                p_fine_flddph[i] = 0.0;
-            } else {
-                p_fine_flddph[i] = std::max(static_cast<decltype(d - dif[i])>(0.0), d - dif[i]);
-            }
-        }
-    }
+nvector::Vector<T, 2> Downscaling<T>::coarse_to_fine(const Area& area, const nvector::View<T, 2>& coarse_flddph) const {
+    nvector::Vector<T, 2> result(std::numeric_limits<T>::quiet_NaN(), area.size.y, area.size.x);
+    const nvector::View<float, 2, float*> flddif(
+        area.flddif.get(), {nvector::Slice{0, 1, static_cast<int>(area.size.x)}, nvector::Slice{0, area.size.x, static_cast<int>(area.size.y)}});
+    const nvector::View<std::int16_t, 2, std::int16_t*> gridx(
+        area.grid.get(), {nvector::Slice{0, 1, static_cast<int>(area.size.x)}, nvector::Slice{0, area.size.x, static_cast<int>(area.size.y)}});
+    const nvector::View<std::int16_t, 2, std::int16_t*> gridy(area.grid.get(),
+                                                              {nvector::Slice{static_cast<int>(area.size.x * area.size.y), 1, static_cast<int>(area.size.x)},
+                                                               nvector::Slice{0, area.size.x, static_cast<int>(area.size.y)}});
+    nvector::foreach_view_parallel(nvector::collect(gridx, gridy, flddif, result),
+                                   [&](std::size_t lat, std::size_t lon, std::size_t x, std::size_t y, float dif, T& out) {
+                                       if (x > 0) {
+                                           const auto d = coarse_flddph(y - 1, x - 1);
+                                           if (std::isnan(d)) {
+                                               out = 0.0;
+                                           } else {
+                                               out = std::max<T>(0.0, d - dif);
+                                           }
+                                       }
+                                   });
+    return result;
 }
 
 template<typename T>
 template<typename Function>
-constexpr void Downscaling<T>::fine_to_med_dx_dy(std::size_t area_size_x, T* p_fine_flddph, float lat, float lon, int dx, int dy, Function&& func) const {
+constexpr void Downscaling<T>::fine_to_med_dx_dy(std::size_t area_size_x, T const* p_fine_flddph, float lat, float lon, int dx, int dy, Function&& func) const {
     const int offset = dy * area_size_x + dx;
     const T dlon = fine_cell_size * dx;
     const T dlat = -fine_cell_size * dy;
@@ -61,8 +64,8 @@ constexpr void Downscaling<T>::fine_to_med_dx_dy(std::size_t area_size_x, T* p_f
 
 template<typename T>
 template<typename Function>
-void Downscaling<T>::fine_to_med(const Area& area, nvector::Vector<T, 2>* fine_flddph, Function&& func) {
-    T* p_fine_flddph = &fine_flddph->data()[0];
+void Downscaling<T>::fine_to_med(const Area& area, const nvector::Vector<T, 2>& fine_flddph, Function&& func) {
+    T const* p_fine_flddph = &fine_flddph.data()[0];
     for (std::size_t y = 0; y < area.size.y; ++y) {
         for (std::size_t x = 0; x < area.size.x; ++x) {
             if (!std::isnan(*p_fine_flddph)) {
@@ -161,8 +164,8 @@ template<typename T>
 void Downscaling<T>::run(pipeline::Pipeline* p) {
     for (auto& area : areas) {
         const auto name = map_path + "/" + area.name;
-        area.grid.reset(new FortranGrid<std::int16_t>(name + ".catmxy", 2 * area.size.x, area.size.y, 'r'));
-        area.flddif.reset(new FortranGrid<float>(name + ".flddif", area.size.x, area.size.y, 'r'));
+        area.grid.open(name + ".catmxy", 2 * area.size.x * area.size.y, 'r');
+        area.flddif.open(name + ".flddif", area.size.x * area.size.y, 'r');
     }
     auto coarse_flddph = p->consume<nvector::View<T, 3>>(return_levels_name);
     const auto projection_times = p->consume<netCDF::DimVar<double>>(projection_times_name);
@@ -174,8 +177,8 @@ void Downscaling<T>::run(pipeline::Pipeline* p) {
                                                                    fldfrc_file.lon(target_lon_count, from_lon, to_lon)});
     downscale(*coarse_flddph, flddph_file, flddph_var, fldfrc_file, fldfrc_var);
     for (auto& area : areas) {
-        area.grid.reset();
-        area.flddif.reset();
+        area.grid.close();
+        area.flddif.close();
     }
 }
 
@@ -194,9 +197,8 @@ void Downscaling<T>::downscale(const nvector::View<T, 3>& timed_flddph,
 #pragma omp parallel for default(shared) schedule(dynamic)
             for (std::size_t area_i = 0; area_i < areas.size(); ++area_i) {
                 const auto& area = areas[area_i];
-                nvector::Vector<T, 2> fine_flddph(std::numeric_limits<T>::quiet_NaN(), area.size.x, area.size.y);
-                coarse_to_fine(area, coarse_flddph, &fine_flddph);
-                fine_to_med(area, &fine_flddph, [&](std::size_t med_lat, std::size_t med_lon, T cell_dph, T dcell_dph) {
+                const auto fine_flddph = coarse_to_fine(area, coarse_flddph);
+                fine_to_med(area, fine_flddph, [&](std::size_t med_lat, std::size_t med_lon, T cell_dph, T dcell_dph) {
                     if (med_lat >= inverse_target_cell_size * (90 - to_lat) && med_lat < inverse_target_cell_size * (90 - from_lat)
                         && med_lon >= inverse_target_cell_size * (180 + from_lon) && med_lon < inverse_target_cell_size * (180 + to_lon)) {
                         const auto target_lat = static_cast<int>(med_lat) - inverse_target_cell_size * (90 - to_lat);
@@ -212,8 +214,7 @@ void Downscaling<T>::downscale(const nvector::View<T, 3>& timed_flddph,
             }
         } else {
             for (auto& area : areas) {
-                nvector::Vector<T, 2> fine_flddph(std::numeric_limits<T>::quiet_NaN(), area.size.y, area.size.x);
-                coarse_to_fine(area, coarse_flddph, &fine_flddph);
+                const auto fine_flddph = coarse_to_fine(area, coarse_flddph);
                 nvector::foreach_view_parallel(
                     nvector::collect(flddph, fldfrc, fldnum), [&](std::size_t lat_index, std::size_t lon_index, T& dph, T& frc, T& num) {
                         if (lat_index < inverse_target_cell_size * (90 - to_lat) && lat_index >= inverse_target_cell_size * (90 - from_lat)

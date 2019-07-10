@@ -21,7 +21,6 @@
 #define FLOOD_PROCESSING_SUM_PER_REGION_H
 
 #include <algorithm>
-#include "FortranGrid.h"
 #include "netcdf/File.h"
 #include "nvector.h"
 #include "pipeline.h"
