@@ -541,12 +541,22 @@ class View {
     }
 
     template<bool... Args>
-    inline SplitView<Split<Args...>::inner_dim, Split<Args...>::outer_dim> split() {
+    constexpr SplitView<Split<Args...>::inner_dim, Split<Args...>::outer_dim> split() {
         return splitter_helper<Split<Args...>>::split(it, dims);
     }
 
     template<typename Splittype>
-    inline SplitView<Splittype::inner_dim, Splittype::outer_dim> split() {
+    constexpr SplitView<Splittype::inner_dim, Splittype::outer_dim> split() {
+        return splitter_helper<Splittype>::split(it, dims);
+    }
+
+    template<bool... Args>
+    constexpr SplitView<Split<Args...>::inner_dim, Split<Args...>::outer_dim> split() const {
+        return splitter_helper<Split<Args...>>::split(it, dims);
+    }
+
+    template<typename Splittype>
+    constexpr SplitView<Splittype::inner_dim, Splittype::outer_dim> split() const {
         return splitter_helper<Splittype>::split(it, dims);
     }
 
