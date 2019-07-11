@@ -70,15 +70,45 @@ using all_true = std::is_same<bool_pack<true, v...>, bool_pack<v..., true>>;
 template<typename T, typename... Args>
 using all_equal = all_true<std::is_same<Args, T>::value...>;
 
+template<typename A, typename B>
+constexpr B&& map(A&& /* unused */, B&& b) {
+    return std::move(b);
+}
+
+constexpr void pass() {}
+
+template<typename Arg>
+constexpr void pass(Arg&& /* unused */) {}
+
+template<typename Arg, typename... Args>
+constexpr void pass(Arg&& /* unused */, Args&&... args) {
+    pass(std::forward<Args>(args)...);
+}
+
+template<typename Arg>
+constexpr bool none_ended(Arg&& it) {
+    return !it.ended();
+}
+
+template<typename Arg, typename... Args>
+constexpr bool none_ended(Arg&& it, Args&&... its) {
+    return !it.ended() && none_ended(std::forward<Args>(its)...);
+}
+
 template<std::size_t c, std::size_t dim, typename... Args>
 struct foreach_dim {
-    static constexpr std::size_t end(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
-        std::get<c>(pos) = std::get<c>(dims).begin + std::get<c>(dims).size;
-        return foreach_dim<c + 1, dim>::end(index * std::get<c>(dims).size, pos, dims);
+    template<typename... Slices>
+    static constexpr bool all_sizes_equal(Slices&&... args) {
+        return all_values_equal(std::get<c>(args).size...) && foreach_dim<c + 1, dim>::all_sizes_equal(std::forward<Slices>(args)...);
     }
-    static constexpr std::size_t begin(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
-        std::get<c>(pos) = 0;
-        return foreach_dim<c + 1, dim>::begin(index * std::get<c>(dims).size, pos, dims);
+    static constexpr std::size_t total_size(const std::array<Slice, dim>& dims) { return foreach_dim<c + 1, dim>::total_size(dims) * std::get<c>(dims).size; }
+    template<std::size_t... Ns>
+    static constexpr std::array<std::size_t, dim> begin() {
+        return foreach_dim<c + 1, dim>::template begin<Ns..., 0>();
+    }
+    template<std::size_t... Ns>
+    static constexpr std::array<std::size_t, dim> end(const std::array<Slice, dim>& dims) {
+        return foreach_dim<c + 1, dim>::template end<Ns..., c>(dims);
     }
     template<typename Tref, typename Iterator>
     static constexpr Tref dereference(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims, Iterator&& it) {
@@ -94,10 +124,10 @@ struct foreach_dim {
         }
     }
     static constexpr void increase(std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims, std::size_t by) {
-        const std::size_t next = (std::get<dim - 1 - c>(pos) + by) / std::get<dim - 1 - c>(dims).size;
-        std::get<dim - 1 - c>(pos) = (std::get<dim - 1 - c>(pos) + by) % std::get<dim - 1 - c>(dims).size;
-        if (next > 0) {
-            foreach_dim<c + 1, dim>::increase(pos, dims, next);
+        const auto d = std::ldiv(std::get<dim - 1 - c>(pos) + by, std::get<dim - 1 - c>(dims).size);
+        std::get<dim - 1 - c>(pos) = d.rem;
+        if (d.quot > 0) {
+            foreach_dim<c + 1, dim>::increase(pos, dims, d.quot);
         }
     }
     template<std::size_t... Ns, typename Function>
@@ -112,15 +142,22 @@ struct foreach_dim {
 
 template<std::size_t dim, typename... Args>
 struct foreach_dim<dim, dim, Args...> {
-    static constexpr std::size_t end(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
-        (void)pos;
-        (void)dims;
-        return index;
+    template<typename... Slices>
+    static constexpr bool all_sizes_equal(Slices&&... args) {
+        pass(args...);
+        return true;
     }
-    static constexpr std::size_t begin(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims) {
-        (void)pos;
+    static constexpr std::size_t total_size(const std::array<Slice, dim>& dims) {
         (void)dims;
-        return index;
+        return 1;
+    }
+    template<std::size_t... Ns>
+    static constexpr std::array<std::size_t, dim> begin() {
+        return {Ns...};
+    }
+    template<std::size_t... Ns>
+    static constexpr std::array<std::size_t, dim> end(const std::array<Slice, dim>& dims) {
+        return {std::get<Ns>(dims).size...};
     }
     template<typename Tref, typename Iterator>
     static constexpr Tref dereference(std::size_t index, std::array<std::size_t, dim>& pos, const std::array<Slice, dim>& dims, Iterator&& it) {
@@ -145,29 +182,9 @@ struct foreach_dim<dim, dim, Args...> {
     }
 };
 
-constexpr void pass() {}
-
-template<typename Arg>
-constexpr void pass(Arg&& /* unused */) {}
-
-template<typename Arg, typename... Args>
-constexpr void pass(Arg&& /* unused */, Args&&... args) {
-    pass(std::forward<Args>(args)...);
-}
-
-template<typename Arg>
-constexpr bool none_ended(Arg&& it) {
-    return !it.ended();
-}
-
-template<typename Arg, typename... Args>
-constexpr bool none_ended(Arg&& it, Args&&... its) {
-    return !it.ended() && none_ended(std::forward<Args>(its)...);
-}
-
 template<typename Function, typename Additional, typename Arg, typename... Args>
-constexpr bool foreach_iterator(Function&& func, Additional&& temp, Arg&& it, Args&&... its) {
-    (void)temp;
+constexpr bool loop_foreach_iterator(Function&& func, Additional&& temp, Arg&& it, Args&&... its) {
+    (void)temp;  // temp is used to keep views for the iterators in memory for the lifespan of this function call
     while (none_ended(std::forward<Arg>(it), std::forward<Args>(its)...)) {
         if (!foreach_dim<0, Arg::dimensions, typename Arg::reference_type, typename Args::reference_type...>::template pass_parameters(
                 it.pos(), std::forward<Function>(func), *it, *its...)) {
@@ -179,17 +196,33 @@ constexpr bool foreach_iterator(Function&& func, Additional&& temp, Arg&& it, Ar
     return true;
 }
 
-template<typename Function, typename Additional, typename Arg, typename... Args>
-inline void foreach_iterator_parallel(Function&& func, Additional&& temp, Arg&& it, Args&&... its) {
-    (void)temp;
-    if (!all_values_equal(it.get_end_index(), its.get_end_index()...)) {
-        throw std::runtime_error("indices have different lengths");
+template<typename Function, typename Arg, typename... Args>
+constexpr void loop_foreach_view_parallel(Function&& func, Arg&& view, Args&&... views) {
+    if (!foreach_dim<0, view.dimensions>::all_sizes_equal(view.slices(), views.slices()...)) {
+        throw std::runtime_error("dimensions of different views have different sizes");
     }
-#pragma omp parallel for default(shared) schedule(guided)
-    for (std::size_t i = 0; i < it.get_end_index(); ++i) {
-        auto it_l = it + i;
-        foreach_dim<0, Arg::dimensions, typename Arg::reference_type, typename Args::reference_type...>::template pass_parameters_void(
-            it_l.pos(), std::forward<Function>(func), *it_l, *(its + i)...);
+#pragma omp parallel for default(shared)
+    for (std::size_t i = 0; i < view.total_size(); ++i) {
+        std::array<std::size_t, view.dimensions> pos = foreach_dim<0, view.dimensions>::begin();
+        foreach_dim<0, view.dimensions>::increase(pos, view.slices(), i);
+        foreach_dim<0, view.dimensions, typename std::remove_reference<Arg>::type::reference_type,
+                    typename std::remove_reference<Args>::type::reference_type...>::
+            template pass_parameters_void(pos, std::forward<Function>(func),
+                                          foreach_dim<0, view.dimensions>::template dereference<typename std::remove_reference<Arg>::type::reference_type>(
+                                              0, pos, view.slices(), view.data()),
+                                          foreach_dim<0, views.dimensions>::template dereference<typename std::remove_reference<Args>::type::reference_type>(
+                                              0, pos, views.slices(), views.data())...);
+    }
+}
+
+template<typename Function, typename Arg, typename... Args>
+inline void loop_foreach_aligned_view_parallel(Function&& func, Arg&& view, Args&&... views) {
+    if (!all_values_equal(view.slices(), views.slices()...)) {
+        throw std::runtime_error("views have different slices");
+    }
+#pragma omp parallel for default(shared)
+    for (std::size_t i = 0; i < view.total_size(); ++i) {
+        func(i, view[i], views[i]...);
     }
 }
 
@@ -203,6 +236,10 @@ struct foreach_helper {
     static constexpr void foreach_view_parallel(Function&& func, const std::tuple<Args...>& views) {
         foreach_helper<i + 1, n, Args...>::template foreach_view_parallel<Function, Ns..., i>(std::forward<Function>(func), views);
     }
+    template<typename Function, std::size_t... Ns>
+    static constexpr void foreach_aligned_parallel(Function&& func, const std::tuple<Args...>& views) {
+        foreach_helper<i + 1, n, Args...>::template foreach_aligned_parallel<Function, Ns..., i>(std::forward<Function>(func), views);
+    }
     template<typename Function, typename Splittype, std::size_t... Ns>
     static constexpr bool foreach_split(Function&& func, const std::tuple<Args...>& views) {
         return foreach_helper<i + 1, n, Args...>::template foreach_split<Function, Splittype, Ns..., i>(std::forward<Function>(func), views);
@@ -215,22 +252,26 @@ struct foreach_helper {
 
 template<typename Function, typename... Args>
 constexpr bool foreach_split_helper(Function&& func, Args&&... splits) {
-    return foreach_iterator(func, collect(splits...), std::begin(splits)...);
+    return loop_foreach_iterator(func, collect(splits...), std::begin(splits)...);
 }
 template<typename Function, typename... Args>
 constexpr void foreach_split_helper_parallel(Function&& func, Args&&... splits) {
-    foreach_iterator_parallel(func, collect(splits...), std::begin(splits)...);
+    loop_foreach_view_parallel(func, std::forward<Args>(splits)...);
 }
 
 template<std::size_t n, typename... Args>
 struct foreach_helper<n, n, Args...> {
     template<typename Function, std::size_t... Ns>
     static constexpr bool foreach_view(Function&& func, const std::tuple<Args...>& views) {
-        return foreach_iterator(std::forward<Function>(func), 0, std::begin(std::get<Ns>(views))...);
+        return loop_foreach_iterator(std::forward<Function>(func), 0, std::begin(std::get<Ns>(views))...);
     }
     template<typename Function, std::size_t... Ns>
     static constexpr void foreach_view_parallel(Function&& func, const std::tuple<Args...>& views) {
-        foreach_iterator_parallel(std::forward<Function>(func), 0, std::begin(std::get<Ns>(views))...);
+        loop_foreach_view_parallel(std::forward<Function>(func), std::forward<Args>(std::get<Ns>(views))...);
+    }
+    template<typename Function, std::size_t... Ns>
+    static constexpr void foreach_aligned_parallel(Function&& func, const std::tuple<Args...>& views) {
+        loop_foreach_aligned_view_parallel(std::forward<Function>(func), std::forward<Args>(std::get<Ns>(views))...);
     }
     template<typename Function, typename Splittype, std::size_t... Ns>
     static constexpr bool foreach_split(Function&& func, const std::tuple<Args...>& views) {
@@ -263,11 +304,12 @@ struct Split<false, Args...> {
 };
 
 struct Slice {
-    int begin = 0;
+    long begin = 0;
     std::size_t size = 0;
-    int stride = 1;
-    Slice(int begin_p, std::size_t size_p, int stride_p) : begin(begin_p), size(size_p), stride(stride_p) {}
-    Slice() = default;
+    long stride = 1;
+    constexpr Slice(long begin_p, std::size_t size_p, long stride_p) : begin(begin_p), size(size_p), stride(stride_p) {}
+    constexpr Slice() = default;
+    constexpr bool operator==(const Slice& other) const { return begin == other.begin && size == other.size && stride == other.stride; }
 };
 
 template<typename T, std::size_t dim, class Iterator = typename std::vector<T>::iterator, typename Tref = typename std::add_lvalue_reference<T>::type>
@@ -295,29 +337,18 @@ class View {
         View* view = nullptr;
         std::array<std::size_t, dim> pos_m;
         std::size_t total_index = 0;
-        std::size_t end_index = 0;
-        iterator() = default;  // NOLINT(hicpp-member-init,cppcoreguidelines-pro-type-member-init)
+        const std::size_t end_index = 0;
         constexpr iterator(View* view_p, std::array<std::size_t, dim> pos_p, std::size_t total_index_p, std::size_t end_index_p)
             : view(view_p), pos_m(pos_p), total_index(total_index_p), end_index(end_index_p){};
 
       public:
-        static const std::size_t dimensions = dim;
+        static constexpr std::size_t dimensions = dim;
         using type = T;
         using reference_type = Tref;
 
-        static constexpr iterator begin(View* view_p) {
-            iterator res{};
-            res.view = view_p;
-            res.end_index = detail::foreach_dim<0, dim>::begin(1, res.pos_m, view_p->dims);
-            res.total_index = 0;
-            return res;
-        }
+        static constexpr iterator begin(View* view_p) { return {view_p, detail::foreach_dim<0, dim>::begin(), 0, view_p->total_size()}; }
         static constexpr iterator end(View* view_p) {
-            iterator res{};
-            res.view = view_p;
-            res.end_index = detail::foreach_dim<0, dim>::end(1, res.pos_m, view_p->dims);
-            res.total_index = res.end_index;
-            return res;
+            return {view_p, detail::foreach_dim<0, dim>::end(view_p->dims), view_p->total_size(), view_p->total_size()};
         }
         constexpr bool ended() const { return total_index == end_index; }
         constexpr std::size_t get_end_index() const { return end_index; }
@@ -348,32 +379,21 @@ class View {
         friend class View;
 
       protected:
-        View const* view = nullptr;
+        const View* const view = nullptr;
         std::array<std::size_t, dim> pos_m;
         std::size_t total_index = 0;
-        std::size_t end_index = 0;
-        const_iterator() = default;  // NOLINT(hicpp-member-init,cppcoreguidelines-pro-type-member-init)
-        constexpr const_iterator(View const* view_p, std::array<std::size_t, dim> pos_p, std::size_t total_index_p, std::size_t end_index_p)
+        const std::size_t end_index = 0;
+        constexpr const_iterator(const View* const view_p, std::array<std::size_t, dim> pos_p, std::size_t total_index_p, std::size_t end_index_p)
             : view(view_p), pos_m(pos_p), total_index(total_index_p), end_index(end_index_p){};
 
       public:
-        static const std::size_t dimensions = dim;
+        static constexpr std::size_t dimensions = dim;
         using type = T;
         using reference_type = Tref;
 
-        static constexpr const_iterator begin(View const* view_p) {
-            const_iterator res{};
-            res.view = view_p;
-            res.end_index = detail::foreach_dim<0, dim>::begin(1, res.pos_m, view_p->dims);
-            res.total_index = 0;
-            return res;
-        }
-        static constexpr const_iterator end(View const* view_p) {
-            const_iterator res{};
-            res.view = view_p;
-            res.end_index = detail::foreach_dim<0, dim>::end(1, res.pos_m, view_p->dims);
-            res.total_index = res.end_index;
-            return res;
+        static constexpr const_iterator begin(const View* const view_p) { return {view_p, detail::foreach_dim<0, dim>::begin(), 0, view_p->total_size()}; }
+        static constexpr const_iterator end(const View* const view_p) {
+            return {view_p, detail::foreach_dim<0, dim>::end(view_p->dims), view_p->total_size(), view_p->total_size()};
         }
         constexpr bool ended() const { return total_index == end_index; }
         constexpr std::size_t get_end_index() const { return end_index; }
@@ -535,25 +555,25 @@ class View {
     };
 
   public:
-    static const std::size_t dimensions = dim;
+    static constexpr std::size_t dimensions = dim;
     using type = T;
     using reference_type = Tref;
     using iterator_type = Iterator;
     template<std::size_t inner_dim>
     using split_type = View<T, inner_dim, Iterator, Tref>;
 
-    View() = default;
+    constexpr View() = default;
     View(const View&) = delete;
-    View(View&&) noexcept = default;
-    View(Iterator it_p, std::array<Slice, dim> dims_p) : it(std::move(it_p)), dims(std::move(dims_p)){};
+    constexpr View(View&&) noexcept = default;
+    constexpr View(Iterator it_p, std::array<Slice, dim> dims_p) : it(std::move(it_p)), dims(std::move(dims_p)){};
 
     template<typename... Args, typename std::enable_if<detail::all_equal<Slice, Args...>::value>::type* = nullptr>
-    explicit View(Iterator it_p, Args&&... args) : it(std::move(it_p)) {
+    explicit constexpr View(Iterator it_p, Args&&... args) : it(std::move(it_p)) {
         initialize_slices<0>(std::forward<Args>(args)...);
     }
 
     template<typename... Args, typename std::enable_if<detail::all_equal<std::size_t, Args...>::value>::type* = nullptr>
-    explicit View(Iterator it_p, Args&&... args) : it(std::move(it_p)) {
+    explicit constexpr View(Iterator it_p, Args&&... args) : it(std::move(it_p)) {
         initialize_sizes<0>(std::forward<Args>(args)...);
     }
 
@@ -578,7 +598,7 @@ class View {
     }
 
     template<typename Function>
-    inline bool foreach_element(Function&& func) {
+    constexpr bool foreach_element(Function&& func) {
         iterator it_l = begin();
         for (; !it_l.ended(); ++it_l) {
             if (!detail::foreach_dim<0, dim, Tref>::template pass_parameters(it_l.pos(), std::forward<Function>(func), *it_l)) {
@@ -588,13 +608,13 @@ class View {
         return true;
     }
 
-    Iterator& data() { return it; }
-    const Iterator& data() const { return it; }
+    constexpr Iterator& data() { return it; }
+    constexpr const Iterator& data() const { return it; }
 
     template<typename Function>
-    inline void foreach_parallel(Function&& func) {
+    constexpr void foreach_parallel(Function&& func) {
         const iterator bg = begin();
-#pragma omp parallel for default(shared) schedule(guided)
+#pragma omp parallel for default(shared)
         for (std::size_t i = 0; i < bg.get_end_index(); ++i) {
             iterator it_l = bg + i;
             detail::foreach_dim<0, dim, Tref>::template pass_parameters_void(it_l.pos(), std::forward<Function>(func), *it_l);
@@ -635,16 +655,20 @@ class View {
     }
 
     constexpr const Slice& slice(std::size_t i) const { return dims.at(i); }
+    constexpr const std::array<Slice, dim>& slices() const { return dims; }
 
     template<std::size_t c>
     constexpr std::size_t size() const {
         static_assert(c < dim, "dimension index out of bounds");
         return std::get<c>(dims).size;
     }
-
     constexpr std::size_t size(std::size_t i) const { return dims.at(i).size; }
 
-    void reset(const T& initial_value) { std::fill(iterator::begin(this), iterator::end(this), initial_value); }
+    constexpr std::size_t total_size() const { return detail::foreach_dim<0, dim>::total_size(dims); }
+    constexpr Tref operator[](std::size_t i) { return it[i]; }
+    constexpr const Tref operator[](std::size_t i) const { return it[i]; }
+
+    constexpr void reset(const T& initial_value) { std::fill(iterator::begin(this), iterator::end(this), initial_value); }
 
     constexpr iterator begin() { return iterator::begin(this); }
     constexpr iterator end() { return iterator::end(this); }
@@ -659,7 +683,13 @@ class Vector : public View<T, dim, typename Storage::iterator> {
     Storage data_m;
 
   public:
-    Vector() { it = std::begin(data_m); }
+    using View<T, dim, typename Storage::iterator>::dimensions;
+    using View<T, dim, typename Storage::iterator>::reference_type;
+    using View<T, dim, typename Storage::iterator>::type;
+    using View<T, dim, typename Storage::iterator>::iterator_type;
+    using View<T, dim, typename Storage::iterator>::split_type;
+
+    constexpr Vector() { it = std::begin(data_m); }
 
     template<typename... Args>
     explicit Vector(const T& initial_value, Args&&... args) {
@@ -678,16 +708,16 @@ class Vector : public View<T, dim, typename Storage::iterator> {
     }
 
     template<typename... Args>
-    void resize(const T& initial_value, Args&&... args) {
+    constexpr void resize(const T& initial_value, Args&&... args) {
         this->template initialize_sizes<0>(std::forward<Args>(args)...);
         data_m.resize(detail::multiply_all(std::forward<Args>(args)...), initial_value);
         it = std::begin(data_m);
     }
 
-    void reset(const T& initial_value) { std::fill(std::begin(data_m), std::end(data_m), initial_value); }
+    constexpr void reset(const T& initial_value) { std::fill(std::begin(data_m), std::end(data_m), initial_value); }
 
-    Storage& data() { return data_m; }
-    const Storage& data() const { return data_m; }
+    constexpr Storage& data() { return data_m; }
+    constexpr const Storage& data() const { return data_m; }
 };
 
 template<typename... Args, typename Function>
@@ -698,6 +728,11 @@ constexpr bool foreach_view(const std::tuple<Args...>& views, Function&& func) {
 template<typename... Args, typename Function>
 constexpr void foreach_view_parallel(const std::tuple<Args...>& views, Function&& func) {
     detail::foreach_helper<0, std::tuple_size<std::tuple<Args...>>::value, Args...>::foreach_view_parallel(std::forward<Function>(func), views);
+}
+
+template<typename... Args, typename Function>
+constexpr void foreach_aligned_parallel(const std::tuple<Args...>& views, Function&& func) {
+    detail::foreach_helper<0, std::tuple_size<std::tuple<Args...>>::value, Args...>::foreach_aligned_parallel(std::forward<Function>(func), views);
 }
 
 template<typename Splittype, typename... Args, typename Function>
