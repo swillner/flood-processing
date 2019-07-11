@@ -28,24 +28,23 @@ namespace modules {
 template<typename T>
 nvector::Vector<T, 2> Downscaling<T>::coarse_to_fine(const Area& area, const nvector::View<T, 2>& coarse_flddph) const {
     nvector::Vector<T, 2> result(std::numeric_limits<T>::quiet_NaN(), area.size.y, area.size.x);
-    const nvector::View<float, 2, float*> flddif(
-        area.flddif.get(), {nvector::Slice{0, 1, static_cast<int>(area.size.x)}, nvector::Slice{0, area.size.x, static_cast<int>(area.size.y)}});
+    const nvector::View<float, 2, float*> flddif(area.flddif.get(),
+                                                 {nvector::Slice{0, area.size.y, static_cast<int>(area.size.x)}, nvector::Slice{0, area.size.x, 1}});
     const nvector::View<std::int16_t, 2, std::int16_t*> gridx(
-        area.grid.get(), {nvector::Slice{0, 1, static_cast<int>(area.size.x)}, nvector::Slice{0, area.size.x, static_cast<int>(area.size.y)}});
-    const nvector::View<std::int16_t, 2, std::int16_t*> gridy(area.grid.get(),
-                                                              {nvector::Slice{static_cast<int>(area.size.x * area.size.y), 1, static_cast<int>(area.size.x)},
-                                                               nvector::Slice{0, area.size.x, static_cast<int>(area.size.y)}});
-    nvector::foreach_view_parallel(nvector::collect(gridx, gridy, flddif, result),
-                                   [&](std::size_t lat, std::size_t lon, std::size_t x, std::size_t y, float dif, T& out) {
-                                       if (x > 0) {
-                                           const auto d = coarse_flddph(y - 1, x - 1);
-                                           if (std::isnan(d)) {
-                                               out = 0.0;
-                                           } else {
-                                               out = std::max<T>(0.0, d - dif);
-                                           }
-                                       }
-                                   });
+        area.grid.get(), {nvector::Slice{0, area.size.y, static_cast<int>(area.size.x)}, nvector::Slice{0, area.size.x, 1}});
+    const nvector::View<std::int16_t, 2, std::int16_t*> gridy(
+        area.grid.get() + area.size.x * area.size.y, {nvector::Slice{0, area.size.y, static_cast<int>(area.size.x)}, nvector::Slice{0, area.size.x, 1}});
+    nvector::foreach_aligned_parallel(nvector::collect(gridx, gridy, flddif, result), [&](std::size_t i, std::int16_t x, std::int16_t y, float dif, T& out) {
+        (void)i;
+        if (x > 0) {
+            const auto d = coarse_flddph(y - 1, x - 1);
+            if (std::isnan(d)) {
+                out = 0.0;
+            } else {
+                out = std::max<T>(0.0, d - dif);
+            }
+        }
+    });
     return result;
 }
 
@@ -215,46 +214,46 @@ void Downscaling<T>::downscale(const nvector::View<T, 3>& timed_flddph,
         } else {
             for (auto& area : areas) {
                 const auto fine_flddph = coarse_to_fine(area, coarse_flddph);
-                nvector::foreach_view_parallel(
-                    nvector::collect(flddph, fldfrc, fldnum), [&](std::size_t lat_index, std::size_t lon_index, T& dph, T& frc, T& num) {
-                        if (lat_index < inverse_target_cell_size * (90 - to_lat) && lat_index >= inverse_target_cell_size * (90 - from_lat)
-                            && lon_index < inverse_target_cell_size * (180 + from_lon) && lon_index >= inverse_target_cell_size * (180 + to_lon)) {
-                            return;
-                        }
-                        const auto lat = 90. - static_cast<float>(lat_index) / static_cast<float>(inverse_target_cell_size);
-                        if (lat > area.origin.lat) {
-                            return;
-                        }
-                        const auto lon = static_cast<float>(lon_index) / static_cast<float>(inverse_target_cell_size) - 180.;
-                        if (lon < area.origin.lon) {
-                            return;
-                        }
-                        const auto start_y = static_cast<std::size_t>((area.origin.lat - lat) * fine_inverse_cell_size);
-                        if (start_y >= area.size.y) {
-                            return;
-                        }
-                        const auto start_x = static_cast<std::size_t>((lon - area.origin.lon) * fine_inverse_cell_size);
-                        if (start_x >= area.size.x) {
-                            return;
-                        }
-                        for (std::size_t y = start_y; y < start_y + (fine_inverse_cell_size / inverse_target_cell_size); ++y) {
-                            for (std::size_t x = start_x; x < start_x + (fine_inverse_cell_size / inverse_target_cell_size); ++x) {
-                                const auto fine_dph = fine_flddph(y, x);
-                                if (!std::isnan(fine_dph)) {
-                                    if (fine_dph > 0) {
-                                        dph = std::max(dph, fine_dph);
-                                        ++frc;
-                                    }
-                                    ++num;
+                nvector::foreach_aligned_parallel(nvector::collect(flddph, fldfrc, fldnum), [&](std::size_t i, T& dph, T& frc, T& num) {
+                    const auto d = std::ldiv(i, target_lon_count);
+                    const auto lat_index = d.quot;
+                    const auto lon_index = d.rem;
+                    if (lat_index < inverse_target_cell_size * (90 - to_lat) && lat_index >= inverse_target_cell_size * (90 - from_lat)
+                        && lon_index < inverse_target_cell_size * (180 + from_lon) && lon_index >= inverse_target_cell_size * (180 + to_lon)) {
+                        return;
+                    }
+                    const auto lat = 90. - static_cast<float>(lat_index) / static_cast<float>(inverse_target_cell_size);
+                    if (lat > area.origin.lat) {
+                        return;
+                    }
+                    const auto lon = static_cast<float>(lon_index) / static_cast<float>(inverse_target_cell_size) - 180.;
+                    if (lon < area.origin.lon) {
+                        return;
+                    }
+                    const auto start_y = static_cast<std::size_t>((area.origin.lat - lat) * fine_inverse_cell_size);
+                    if (start_y >= area.size.y) {
+                        return;
+                    }
+                    const auto start_x = static_cast<std::size_t>((lon - area.origin.lon) * fine_inverse_cell_size);
+                    if (start_x >= area.size.x) {
+                        return;
+                    }
+                    for (std::size_t y = start_y; y < start_y + (fine_inverse_cell_size / inverse_target_cell_size); ++y) {
+                        for (std::size_t x = start_x; x < start_x + (fine_inverse_cell_size / inverse_target_cell_size); ++x) {
+                            const auto fine_dph = fine_flddph(y, x);
+                            if (!std::isnan(fine_dph)) {
+                                if (fine_dph > 0) {
+                                    dph = std::max(dph, fine_dph);
+                                    ++frc;
                                 }
+                                ++num;
                             }
                         }
-                    });
+                    }
+                });
             }
         }
-        nvector::foreach_view_parallel(nvector::collect(fldnum, flddph, fldfrc), [](std::size_t lat, std::size_t lon, T num, T& dph, T& frc) {
-            (void)lat;
-            (void)lon;
+        nvector::foreach_aligned_parallel(nvector::collect(fldnum, flddph, fldfrc), [](std::size_t /* unused */, T num, T& dph, T& frc) {
             if (num > 0) {
                 frc /= num;
             } else {

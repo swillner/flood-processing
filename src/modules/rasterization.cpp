@@ -290,6 +290,8 @@ void Rasterization<T>::run(pipeline::Pipeline* p) {
         });
     }
     p->provide<nvector::Vector<T, 2>>("raster", raster);
+#else
+    (void)p;
 #endif
 }
 
@@ -360,6 +362,8 @@ void RegionIndexRasterization<T>::run(pipeline::Pipeline* p) {
         advance(raster, max_advance);
     }
     p->provide<nvector::Vector<T, 3>>("region_index_raster", raster_raw);
+#else
+    (void)p;
 #endif
 }
 
