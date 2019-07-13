@@ -24,7 +24,7 @@
 #include <cstdint>
 #include <memory>
 #include <tuple>
-#include "mmappedfile.h"
+#include "cudatools.h"
 #include "nvector.h"
 #include "pipeline.h"
 #include "settingsnode.h"
@@ -39,7 +39,7 @@ namespace modules {
 
 template<typename T>
 class Downscaling : public pipeline::Module {
-  protected:
+  public:
     struct Area {
         const char* name = "\0";
         struct {
@@ -50,9 +50,12 @@ class Downscaling : public pipeline::Module {
             std::size_t x;
             std::size_t y;
         } size;
-        MMappedFile<std::int16_t> grid;
-        MMappedFile<float> flddif;
+        nvector::Vector<std::int16_t, 2, cudatools::vector<std::int16_t, true>> gridx;
+        nvector::Vector<std::int16_t, 2, cudatools::vector<std::int16_t, true>> gridy;
+        nvector::Vector<float, 2, cudatools::vector<float, true>> flddif;
     };
+
+  protected:
     std::array<Area, 14> areas{
         Area{"sa1", {-85, 15}, {11000, 15000}, {}, {}}, Area{"ca1", {-120, 40}, {12000, 7000}, {}, {}}, Area{"na1", {-130, 60}, {16000, 7000}, {}, {}},
         Area{"af1", {5, 35}, {11000, 14000}, {}, {}},   Area{"eu1", {-20, 60}, {8000, 12000}, {}, {}},  Area{"eu2", {5, 60}, {13000, 8000}, {}, {}},
@@ -84,13 +87,15 @@ class Downscaling : public pipeline::Module {
     constexpr void fine_to_med_dx_dy(std::size_t area_size_x, T const* p_fine_flddph, float lat, float lon, int dx, int dy, Function&& func) const;
     template<typename Function>
     void fine_to_med(const Area& area, const nvector::Vector<T, 2>& fine_flddph, Function&& func);
+
+  public:
+    void coarse_to_fine_gpu(const Area& area, const nvector::View<T, 2, T*>& coarse_flddph, nvector::View<T, 2, T*>& result) const;
     void downscale(const nvector::View<T, 3>& timed_flddph,
                    netCDF::File& result_flddph,
                    netCDF::NcVar result_flddph_var,
                    netCDF::File& result_fldfrc,
                    netCDF::NcVar result_fldfrc_var);
 
-  public:
     explicit Downscaling(const settings::SettingsNode& settings);
     void run(pipeline::Pipeline* p) override;
 

@@ -18,7 +18,8 @@
 */
 
 #include "modules/downscaling.h"
-#include "mmappedfile.h"
+#include <fstream>
+#include "cudatools.h"
 #include "netcdf/File.h"
 #include "progressbar.h"
 
@@ -28,24 +29,43 @@ namespace modules {
 template<typename T>
 nvector::Vector<T, 2> Downscaling<T>::coarse_to_fine(const Area& area, const nvector::View<T, 2>& coarse_flddph) const {
     nvector::Vector<T, 2> result(std::numeric_limits<T>::quiet_NaN(), area.size.y, area.size.x);
-    const nvector::View<float, 2, float*> flddif(area.flddif.get(),
-                                                 {nvector::Slice{0, area.size.y, static_cast<int>(area.size.x)}, nvector::Slice{0, area.size.x, 1}});
-    const nvector::View<std::int16_t, 2, std::int16_t*> gridx(
-        area.grid.get(), {nvector::Slice{0, area.size.y, static_cast<int>(area.size.x)}, nvector::Slice{0, area.size.x, 1}});
-    const nvector::View<std::int16_t, 2, std::int16_t*> gridy(
-        area.grid.get() + area.size.x * area.size.y, {nvector::Slice{0, area.size.y, static_cast<int>(area.size.x)}, nvector::Slice{0, area.size.x, 1}});
-    nvector::foreach_aligned_parallel(nvector::collect(gridx, gridy, flddif, result), [&](std::size_t i, std::int16_t x, std::int16_t y, float dif, T& out) {
-        (void)i;
-        if (x > 0) {
-            const auto d = coarse_flddph(y - 1, x - 1);
-            if (std::isnan(d)) {
-                out = 0.0;
-            } else {
-                out = std::max<T>(0.0, d - dif);
-            }
-        }
-    });
+    nvector::foreach_aligned_parallel(nvector::collect(area.gridx, area.gridy, area.flddif, result),
+                                      [&](std::size_t i, std::int16_t x, std::int16_t y, float dif, T& out) {
+                                          (void)i;
+                                          if (x > 0) {
+                                              const auto d = coarse_flddph(y - 1, x - 1);
+                                              if (std::isnan(d)) {
+                                                  out = 0.0;
+                                              } else {
+                                                  out = std::max<T>(0.0, d - dif);
+                                              }
+                                          }
+                                      });
     return result;
+}
+
+template<typename T>
+void Downscaling<T>::coarse_to_fine_gpu(const Area& area, const nvector::View<T, 2, T*>& coarse_flddph, nvector::View<T, 2, T*>& result) const {
+    const auto* coarse_flddph_ptr = &coarse_flddph[0];
+    const auto size_x = coarse_flddph.template size<1>();
+    nvector::foreach_aligned_gpu(nvector::collect(area.gridx, area.gridy, area.flddif, result),
+                                 [=] CUDA_DEVICE(std::size_t i, std::int16_t x, std::int16_t y, float dif, T& out) {
+                                     (void)i;
+                                     if (x > 0) {
+                                         const auto d = coarse_flddph_ptr[(y - 1) * size_x + x - 1];
+                                         if (std::isnan(d)) {
+                                             out = 0.0;
+                                         } else {
+                                             if (d > dif) {
+                                                 out = d - dif;
+                                             } else {
+                                                 out = 0.0;
+                                             }
+                                         }
+                                     } else {
+                                         out = -1;
+                                     }
+                                 });
 }
 
 template<typename T>
@@ -163,8 +183,18 @@ template<typename T>
 void Downscaling<T>::run(pipeline::Pipeline* p) {
     for (auto& area : areas) {
         const auto name = map_path + "/" + area.name;
-        area.grid.open(name + ".catmxy", 2 * area.size.x * area.size.y, 'r');
-        area.flddif.open(name + ".flddif", area.size.x * area.size.y, 'r');
+        {
+            area.gridx.resize(0, area.size.y, area.size.x);
+            area.gridy.resize(0, area.size.y, area.size.x);
+            std::ifstream grid(name + ".catmxy", std::ios::in | std::ios::binary);
+            area.gridx.data().read(grid);
+            area.gridy.data().read(grid);
+        }
+        {
+            area.flddif.resize(0, area.size.y, area.size.x);
+            std::ifstream flddif(name + ".flddif", std::ios::in | std::ios::binary);
+            area.flddif.data().read(flddif);
+        }
     }
     auto coarse_flddph = p->consume<nvector::View<T, 3>>(return_levels_name);
     const auto projection_times = p->consume<netCDF::DimVar<double>>(projection_times_name);
@@ -176,8 +206,9 @@ void Downscaling<T>::run(pipeline::Pipeline* p) {
                                                                    fldfrc_file.lon(target_lon_count, from_lon, to_lon)});
     downscale(*coarse_flddph, flddph_file, flddph_var, fldfrc_file, fldfrc_var);
     for (auto& area : areas) {
-        area.grid.close();
-        area.flddif.close();
+        area.gridx.resize(0, 0, 0);
+        area.gridy.resize(0, 0, 0);
+        area.flddif.resize(0, 0, 0);
     }
 }
 
@@ -187,11 +218,16 @@ void Downscaling<T>::downscale(const nvector::View<T, 3>& timed_flddph,
                                netCDF::NcVar result_flddph_var,
                                netCDF::File& result_fldfrc,
                                netCDF::NcVar result_fldfrc_var) {
+    nvector::Vector<T, 3, cudatools::vector<T, true>> coarse_flddph_gpu(0, timed_flddph.slices());
+    coarse_flddph_gpu.data().set(&timed_flddph[0]);
     progressbar::ProgressBar progress(timed_flddph.template size<0>(), "Downscaling");
+    nvector::Vector<T, 2, cudatools::vector<T>> flddph(0, target_lat_count, target_lon_count);
+    nvector::Vector<T, 2, cudatools::vector<T>> fldfrc(0, target_lat_count, target_lon_count);
+    nvector::Vector<T, 2, cudatools::vector<T>> fldnum(0, target_lat_count, target_lon_count);
     nvector::foreach_split<nvector::Split<false, true, true>>(nvector::collect(timed_flddph), [&](std::size_t index, const nvector::View<T, 2>& coarse_flddph) {
-        nvector::Vector<T, 2> flddph(0, target_lat_count, target_lon_count);
-        nvector::Vector<T, 2> fldfrc(0, target_lat_count, target_lon_count);
-        nvector::Vector<T, 2> fldnum(0, target_lat_count, target_lon_count);
+        flddph.reset(0);
+        fldfrc.reset(0);
+        fldnum.reset(0);
         if (inverse_target_cell_size % 3 == 0) {
 #pragma omp parallel for default(shared) schedule(dynamic)
             for (std::size_t area_i = 0; area_i < areas.size(); ++area_i) {
@@ -213,37 +249,51 @@ void Downscaling<T>::downscale(const nvector::View<T, 3>& timed_flddph,
             }
         } else {
             for (auto& area : areas) {
-                const auto fine_flddph = coarse_to_fine(area, coarse_flddph);
-                nvector::foreach_aligned_parallel(nvector::collect(flddph, fldfrc, fldnum), [&](std::size_t i, T& dph, T& frc, T& num) {
-                    const auto d = std::ldiv(i, target_lon_count);
-                    const auto lat_index = d.quot;
-                    const auto lon_index = d.rem;
-                    if (lat_index < inverse_target_cell_size * (90 - to_lat) && lat_index >= inverse_target_cell_size * (90 - from_lat)
-                        && lon_index < inverse_target_cell_size * (180 + from_lon) && lon_index >= inverse_target_cell_size * (180 + to_lon)) {
+                nvector::Vector<T, 2, cudatools::vector<T, true>> fine_flddph(std::numeric_limits<T>::quiet_NaN(), area.size.y, area.size.x);
+                coarse_to_fine_gpu(area, coarse_flddph_gpu.template split<nvector::Split<false, true, true>>()[index], fine_flddph);
+                T* fine_flddph_ptr = &fine_flddph[0];
+                const auto size_x = area.size.x;
+                const auto size_y = area.size.y;
+                const auto origin_lat = area.origin.lat;
+                const auto origin_lon = area.origin.lon;
+                const auto fine_inverse_cell_size_l = fine_inverse_cell_size;
+                const auto inverse_target_cell_size_l = inverse_target_cell_size;
+                const auto target_lon_count_l = target_lon_count;
+                const auto from_lat_l = from_lat;
+                const auto from_lon_l = from_lon;
+                const auto to_lat_l = to_lat;
+                const auto to_lon_l = to_lon;
+                nvector::foreach_aligned_gpu(nvector::collect(flddph, fldfrc, fldnum), [=] CUDA_DEVICE(std::size_t i, T & dph, T & frc, T & num) {
+                    const auto lat_index = i / target_lon_count_l;
+                    const auto lon_index = i % target_lon_count_l;
+                    if (lat_index < inverse_target_cell_size_l * (90 - to_lat_l) && lat_index >= inverse_target_cell_size_l * (90 - from_lat_l)
+                        && lon_index < inverse_target_cell_size_l * (180 + from_lon_l) && lon_index >= inverse_target_cell_size_l * (180 + to_lon_l)) {
                         return;
                     }
-                    const auto lat = 90. - static_cast<float>(lat_index) / static_cast<float>(inverse_target_cell_size);
-                    if (lat > area.origin.lat) {
+                    const auto lat = 90. - static_cast<float>(lat_index) / static_cast<float>(inverse_target_cell_size_l);
+                    if (lat > origin_lat) {
                         return;
                     }
-                    const auto lon = static_cast<float>(lon_index) / static_cast<float>(inverse_target_cell_size) - 180.;
-                    if (lon < area.origin.lon) {
+                    const auto lon = static_cast<float>(lon_index) / static_cast<float>(inverse_target_cell_size_l) - 180.;
+                    if (lon < origin_lon) {
                         return;
                     }
-                    const auto start_y = static_cast<std::size_t>((area.origin.lat - lat) * fine_inverse_cell_size);
-                    if (start_y >= area.size.y) {
+                    const auto start_y = static_cast<std::size_t>((origin_lat - lat) * fine_inverse_cell_size_l);
+                    if (start_y >= size_y) {
                         return;
                     }
-                    const auto start_x = static_cast<std::size_t>((lon - area.origin.lon) * fine_inverse_cell_size);
-                    if (start_x >= area.size.x) {
+                    const auto start_x = static_cast<std::size_t>((lon - origin_lon) * fine_inverse_cell_size_l);
+                    if (start_x >= size_x) {
                         return;
                     }
-                    for (std::size_t y = start_y; y < start_y + (fine_inverse_cell_size / inverse_target_cell_size); ++y) {
-                        for (std::size_t x = start_x; x < start_x + (fine_inverse_cell_size / inverse_target_cell_size); ++x) {
-                            const auto fine_dph = fine_flddph(y, x);
-                            if (!std::isnan(fine_dph)) {
+                    for (std::size_t y = start_y; y < start_y + (fine_inverse_cell_size_l / inverse_target_cell_size_l); ++y) {
+                        for (std::size_t x = start_x; x < start_x + (fine_inverse_cell_size_l / inverse_target_cell_size_l); ++x) {
+                            const auto fine_dph = fine_flddph_ptr[y * size_x + x];
+                            if (fine_dph >= 0) {
                                 if (fine_dph > 0) {
-                                    dph = std::max(dph, fine_dph);
+                                    if (fine_dph > dph) {
+                                        dph = fine_dph;
+                                    }
                                     ++frc;
                                 }
                                 ++num;
@@ -253,16 +303,23 @@ void Downscaling<T>::downscale(const nvector::View<T, 3>& timed_flddph,
                 });
             }
         }
-        nvector::foreach_aligned_parallel(nvector::collect(fldnum, flddph, fldfrc), [](std::size_t /* unused */, T num, T& dph, T& frc) {
+        const auto nan = std::numeric_limits<T>::quiet_NaN();
+        nvector::foreach_aligned_gpu(nvector::collect(fldnum, flddph, fldfrc), [=] CUDA_DEVICE(std::size_t i, T num, T & dph, T & frc) {
+            (void)i;
             if (num > 0) {
                 frc /= num;
             } else {
-                dph = std::numeric_limits<T>::quiet_NaN();
-                frc = std::numeric_limits<T>::quiet_NaN();
+                dph = nan;
+                frc = nan;
             }
         });
-        result_flddph.set<T, 2>(result_flddph_var, flddph, index);
-        result_fldfrc.set<T, 2>(result_fldfrc_var, fldfrc, index);
+#pragma omp parallel sections default(shared)
+        {
+#pragma omp section
+            { result_flddph.set<T, 2>(result_flddph_var, flddph, index); }
+#pragma omp section
+            { result_fldfrc.set<T, 2>(result_fldfrc_var, fldfrc, index); }
+        }
         ++progress;
         return true;
     });

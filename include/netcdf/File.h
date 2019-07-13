@@ -99,28 +99,32 @@ class File : public netCDF::NcFile {
         static inline nvector::Vector<T, dim> reserve(const netCDF::NcVar& var_p) { return nvector::Vector<T, dim>(0, var_p.getDim(Ns).getSize()...); }
     };
 
-    template<typename T, std::size_t c, std::size_t dim, std::size_t... Ns>
+    template<typename T, std::size_t c, std::size_t dim, typename Storage, std::size_t... Ns>
     struct set_helper {
-        static inline void set(netCDF::NcVar& var, const nvector::Vector<T, dim>& data) { set_helper<T, c + 1, dim, Ns..., c>::set(var, data); }
-    };
-
-    template<typename T, std::size_t dim, std::size_t... Ns>
-    struct set_helper<T, dim, dim, Ns...> {
-        static inline void set(netCDF::NcVar& var, const nvector::Vector<T, dim>& data) { var.putVar({(0 * Ns)...}, {data.size(Ns)...}, &data.data()[0]); }
-    };
-
-    template<typename T, std::size_t c, std::size_t dim, std::size_t... Ns>
-    struct var_set_helper {
-        template<typename... Indices>
-        static inline void set(netCDF::NcVar& var, const nvector::Vector<T, dim>& data, Indices&&... indices) {
-            var_set_helper<T, c + 1, dim, Ns..., c>::set(var, data, std::forward<Indices>(indices)...);
+        static inline void set(netCDF::NcVar& var, const nvector::Vector<T, dim, Storage>& data) {
+            set_helper<T, c + 1, dim, Storage, Ns..., c>::set(var, data);
         }
     };
 
-    template<typename T, std::size_t dim, std::size_t... Ns>
-    struct var_set_helper<T, dim, dim, Ns...> {
+    template<typename T, std::size_t dim, typename Storage, std::size_t... Ns>
+    struct set_helper<T, dim, dim, Storage, Ns...> {
+        static inline void set(netCDF::NcVar& var, const nvector::Vector<T, dim, Storage>& data) {
+            var.putVar({(0 * Ns)...}, {data.size(Ns)...}, &data.data()[0]);
+        }
+    };
+
+    template<typename T, std::size_t c, std::size_t dim, typename Storage, std::size_t... Ns>
+    struct var_set_helper {
         template<typename... Indices>
-        static inline void set(netCDF::NcVar& var, const nvector::Vector<T, dim>& data, Indices&&... indices) {
+        static inline void set(netCDF::NcVar& var, const nvector::Vector<T, dim, Storage>& data, Indices&&... indices) {
+            var_set_helper<T, c + 1, dim, Storage, Ns..., c>::set(var, data, std::forward<Indices>(indices)...);
+        }
+    };
+
+    template<typename T, std::size_t dim, typename Storage, std::size_t... Ns>
+    struct var_set_helper<T, dim, dim, Storage, Ns...> {
+        template<typename... Indices>
+        static inline void set(netCDF::NcVar& var, const nvector::Vector<T, dim, Storage>& data, Indices&&... indices) {
             var.putVar({std::forward<Indices>(indices)..., (0 * Ns)...}, {(0 * sizeof(Indices) + 1)..., data.size(Ns)...}, &data.data()[0]);
         }
     };
@@ -234,14 +238,14 @@ class File : public netCDF::NcFile {
         var.putVar(&data[0]);
     }
 
-    template<typename T, std::size_t dim>
-    void set(netCDF::NcVar var, const nvector::Vector<T, dim>& data) {
-        set_helper<T, 0, dim>::set(var, data);
+    template<typename T, std::size_t dim, typename Storage>
+    void set(netCDF::NcVar var, const nvector::Vector<T, dim, Storage>& data) {
+        set_helper<T, 0, dim, Storage>::set(var, data);
     }
 
-    template<typename T, std::size_t dim, typename... Indices>
-    void set(netCDF::NcVar var, const nvector::Vector<T, dim>& data, Indices&&... indices) {
-        var_set_helper<T, 0, dim>::set(var, data, std::forward<Indices>(indices)...);
+    template<typename T, std::size_t dim, typename Storage, typename... Indices>
+    void set(netCDF::NcVar var, const nvector::Vector<T, dim, Storage>& data, Indices&&... indices) {
+        var_set_helper<T, 0, dim, Storage>::set(var, data, std::forward<Indices>(indices)...);
     }
 
     template<typename T>

@@ -1,4 +1,4 @@
-# Copyright (C) 2017 Sven Willner <sven.willner@pik-potsdam.de>
+# Copyright (C) 2017-2019 Sven Willner <sven.willner@pik-potsdam.de>
 #
 # This file is part of flood-processing.
 #
@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with flood-processing.  If not, see <http://www.gnu.org/licenses/>.
 
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.8)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 include(cmake/helpers.cmake)
@@ -27,9 +27,8 @@ project(flood_processing)
 
 file(GLOB MODULE_SOURCES src/modules/*.cpp)
 add_executable(flood_processing src/main.cpp ${MODULE_SOURCES})
-
 target_include_directories(flood_processing PRIVATE include lib/lmoments/include lib/cpp-library)
-target_compile_options(flood_processing PRIVATE -std=c++14)
+set_property(TARGET flood_processing PROPERTY CXX_STANDARD 14)
 
 set_advanced_cpp_warnings(flood_processing)
 set_build_type_specifics(flood_processing)
@@ -43,7 +42,16 @@ if(PARALLELIZATION)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-include_netcdf_cxx4(flood_processing ON v4.3.0)
+option(USE_CUDA "" OFF)
+if(USE_CUDA)
+  set(CMAKE_CUDA_HOST_COMPILER "${CMAKE_CXX_COMPILER}")
+  enable_language(CUDA)
+  set_target_properties(flood_processing PROPERTIES CUDA_SEPERABLE_COMPILATION ON)
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda")
+  set_source_files_properties(src/modules/downscaling.cpp PROPERTIES LANGUAGE CUDA)
+  target_compile_definitions(flood_processing PRIVATE USE_CUDA)
+  message(STATUS "Using CUDA host compiler: ${CMAKE_CUDA_HOST_COMPILER}")
+endif()
 
 option(WITH_GDAL "" OFF)
 if(WITH_GDAL)
@@ -59,6 +67,7 @@ endif()
 
 include(lib/settingsnode/settingsnode.cmake)
 include_settingsnode(flood_processing)
+include_netcdf_cxx4(flood_processing ON v4.3.0)
 include_yaml_cpp(flood_processing ON "yaml-cpp-0.6.2")
 
 add_cpp_tools(flood_processing)
