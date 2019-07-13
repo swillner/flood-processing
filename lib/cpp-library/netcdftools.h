@@ -18,13 +18,16 @@
 #ifndef NETCDFTOOLS_H
 #define NETCDFTOOLS_H
 
+#if __CUDACC__
+#pragma push
+#pragma diag_suppress = useless_type_qualifier_on_return_type
+#elif __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wignored-qualifiers"
 #pragma GCC diagnostic ignored "-Wpedantic"
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"
 #pragma GCC diagnostic ignored "-Wunused-variable"
-
-#if _MSC_VER || __INTEL_COMPILER
+#elif _MSC_VER || __INTEL_COMPILER
 #pragma warning push
 #pragma warning disable : 858
 #endif
@@ -36,11 +39,13 @@
 #include <ncVar.h>
 #include <netcdf>
 
-#if _MSC_VER || __INTEL_COMPILER
+#if __CUDACC__
+#pragma pop
+#elif __GNUC__
+#pragma GCC diagnostic pop
+#elif _MSC_VER || __INTEL_COMPILER
 #pragma warning pop
 #endif
-
-#pragma GCC diagnostic pop
 
 #include <algorithm>
 #include <string>
