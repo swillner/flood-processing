@@ -24,6 +24,7 @@
 #include <iterator>
 #include <stdexcept>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -67,8 +68,11 @@ struct bool_pack;
 template<bool... v>
 using all_true = std::is_same<bool_pack<true, v...>, bool_pack<v..., true>>;
 
-template<typename T, typename... Args>
-using all_equal = all_true<std::is_same<Args, T>::value...>;
+template<typename... Args>
+using only_for_sizes = typename std::enable_if<all_true<std::is_integral<typename std::remove_reference<Args>::type>::value...>::value>::type;
+
+template<typename... Args>
+using only_for_slices = typename std::enable_if<all_true<std::is_same<Slice, typename std::remove_reference<Args>::type>::value...>::value>::type;
 
 template<typename A, typename B>
 constexpr B&& map(A&& /* unused */, B&& b) {
@@ -216,7 +220,7 @@ constexpr void loop_foreach_view_parallel(Function&& func, Arg&& view, Args&&...
 }
 
 template<typename Function, typename Arg, typename... Args>
-inline void loop_foreach_aligned_view_parallel(Function&& func, Arg&& view, Args&&... views) {
+constexpr void loop_foreach_aligned_view_parallel(Function&& func, Arg&& view, Args&&... views) {
     if (!all_values_equal(view.slices(), views.slices()...)) {
         throw std::runtime_error("views have different slices");
     }
@@ -565,16 +569,16 @@ class View {
     constexpr View() = default;
     View(const View&) = delete;
     constexpr View(View&&) noexcept = default;
-    constexpr View(Iterator it_p, std::array<Slice, dim> dims_p) : it(std::move(it_p)), dims(std::move(dims_p)){};
+    constexpr View(Iterator it_p, std::array<Slice, dim> dims_p) : it(std::move(it_p)), dims(std::move(dims_p)) {}
 
-    template<typename... Args, typename std::enable_if<detail::all_equal<Slice, Args...>::value>::type* = nullptr>
-    explicit constexpr View(Iterator it_p, Args&&... args) : it(std::move(it_p)) {
-        initialize_slices<0>(std::forward<Args>(args)...);
-    }
-
-    template<typename... Args, typename std::enable_if<detail::all_equal<std::size_t, Args...>::value>::type* = nullptr>
+    template<typename... Args, typename detail::only_for_sizes<Args...>* = nullptr>
     explicit constexpr View(Iterator it_p, Args&&... args) : it(std::move(it_p)) {
         initialize_sizes<0>(std::forward<Args>(args)...);
+    }
+
+    template<typename... Args, typename detail::only_for_slices<Args...>* = nullptr>
+    explicit constexpr View(Iterator it_p, Args&&... args) : it(std::move(it_p)) {
+        initialize_slices<0>(std::forward<Args>(args)...);
     }
 
     template<bool... Args>
@@ -676,32 +680,52 @@ class View {
     constexpr const_iterator end() const { return const_iterator::end(this); }
 };
 
-template<typename T, std::size_t dim, class Storage = std::vector<T>>
-class Vector : public View<T, dim, typename Storage::iterator> {
+template<typename T, std::size_t dim, class Storage = std::vector<T>, typename Iterator = typename Storage::iterator>
+class Vector : public View<T, dim, Iterator> {
   protected:
-    using View<T, dim, typename Storage::iterator>::it;
+    using View<T, dim, Iterator>::it;
     Storage data_m;
 
   public:
-    using View<T, dim, typename Storage::iterator>::dimensions;
-    using View<T, dim, typename Storage::iterator>::reference_type;
-    using View<T, dim, typename Storage::iterator>::type;
-    using View<T, dim, typename Storage::iterator>::iterator_type;
-    using View<T, dim, typename Storage::iterator>::split_type;
+    using View<T, dim, Iterator>::dimensions;
+    using View<T, dim, Iterator>::reference_type;
+    using View<T, dim, Iterator>::type;
+    using View<T, dim, Iterator>::iterator_type;
+    using View<T, dim, Iterator>::split_type;
 
     constexpr Vector() { it = std::begin(data_m); }
+    constexpr Vector(const T& initial_value, std::array<Slice, dim> dims_p) : View<T, dim, Iterator>(std::begin(data_m), std::move(dims_p)) {
+        data_m.resize(this->total_size(), initial_value);
+        it = std::begin(data_m);
+    }
 
-    template<typename... Args>
+    template<typename... Args, typename detail::only_for_sizes<Args...>* = nullptr>
     explicit Vector(const T& initial_value, Args&&... args) {
         this->template initialize_sizes<0>(std::forward<Args>(args)...);
         data_m.resize(detail::multiply_all(std::forward<Args>(args)...), initial_value);
         it = std::begin(data_m);
     }
 
-    template<typename... Args>
+    template<typename... Args, typename detail::only_for_slices<Args...>* = nullptr>
+    explicit Vector(const T& initial_value, Args&&... args) {
+        this->template initialize_slices<0>(std::forward<Args>(args)...);
+        data_m.resize(detail::multiply_all(args.size...), initial_value);
+        it = std::begin(data_m);
+    }
+
+    template<typename... Args, typename detail::only_for_sizes<Args...>* = nullptr>
     explicit Vector(Storage data_p, Args&&... args) : data_m(std::move(data_p)) {
         this->template initialize_sizes<0>(std::forward<Args>(args)...);
         if (detail::multiply_all<std::size_t>(std::forward<Args>(args)...) != data_m.size()) {
+            throw std::runtime_error("wrong size of underlying data");
+        }
+        it = std::begin(data_m);
+    }
+
+    template<typename... Args, typename detail::only_for_slices<Args...>* = nullptr>
+    explicit Vector(Storage data_p, Args&&... args) : data_m(std::move(data_p)) {
+        this->template initialize_slices<0>(std::forward<Args>(args)...);
+        if (detail::multiply_all<std::size_t>(args.size...) != data_m.size()) {
             throw std::runtime_error("wrong size of underlying data");
         }
         it = std::begin(data_m);
