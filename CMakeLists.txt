@@ -50,7 +50,6 @@ if(USE_CUDA)
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda")
   set_source_files_properties(src/modules/downscaling.cpp PROPERTIES LANGUAGE CUDA)
   target_compile_definitions(flood_processing PRIVATE USE_CUDA)
-  message(STATUS "Using CUDA host compiler: ${CMAKE_CUDA_HOST_COMPILER}")
 endif()
 
 option(WITH_GDAL "" OFF)
