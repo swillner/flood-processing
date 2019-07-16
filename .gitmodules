@@ -1,0 +1,15 @@
+[submodule "cmake"]
+	path = cmake
+	url = https://github.com/swillner/cmake-modules.git
+[submodule "lib/cpp-library"]
+	path = lib/cpp-library
+	url = https://github.com/swillner/cpp-library.git
+[submodule "lib/lmoments"]
+	path = lib/lmoments
+	url = https://github.com/swillner/lmoments.git
+[submodule "lib/settingsnode"]
+	path = lib/settingsnode
+	url = https://github.com/swillner/settingsnode.git
+[submodule "lib/nvector"]
+	path = lib/nvector
+	url = https://github.com/swillner/nvector.git

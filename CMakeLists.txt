@@ -27,7 +27,7 @@ project(flood_processing)
 
 file(GLOB MODULE_SOURCES src/modules/*.cpp)
 add_executable(flood_processing src/main.cpp ${MODULE_SOURCES})
-target_include_directories(flood_processing PRIVATE include lib/lmoments/include lib/cpp-library)
+target_include_directories(flood_processing PRIVATE include lib/lmoments/include lib/cpp-library lib/nvector)
 set_property(TARGET flood_processing PROPERTY CXX_STANDARD 14)
 
 set_advanced_cpp_warnings(flood_processing)
