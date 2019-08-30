@@ -18,14 +18,16 @@
 #ifndef NETCDFGRIDFILE_H
 #define NETCDFGRIDFILE_H
 
-#include <assert.h>
 #include <ncDim.h>
 #include <ncFile.h>
 #include <ncGroupAtt.h>
 #include <ncType.h>
 #include <ncVar.h>
+#include <ctime>
+#include <iomanip>
 #include <iostream>
 #include <netcdf>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -135,6 +137,15 @@ class File : public netCDF::NcFile {
                 break;
             case 'w':
                 open(filename, netCDF::NcFile::replace, netCDF::NcFile::nc4);
+                {
+                    auto now = std::time(nullptr);
+                    std::ostringstream ss;
+                    ss << std::put_time(std::localtime(&now), "%Y-%m-%d %H:%M:%S");
+                    putAtt("created_at", ss.str());
+                }
+                putAtt("created_with", "https://github.com/swillner/flood-processing by S. Willner");
+                putAtt("citation", "https://doi.org/10.5281/zenodo.1241051");
+                putAtt("contact", "sven.willner@pik-potsdam.de");
                 break;
             default:
                 throw std::runtime_error("unknown file mode");
