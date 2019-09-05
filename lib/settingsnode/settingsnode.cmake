@@ -14,13 +14,10 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 set(SETTINGSNODE_MODULES_PATH ${CMAKE_CURRENT_LIST_DIR})
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${SETTINGSNODE_MODULES_PATH}/cmake)
-include(${SETTINGSNODE_MODULES_PATH}/cmake/libraries.cmake)
-
-function(include_settingsnode TARGET)
+if (NOT TARGET settingsnode)
   add_library(settingsnode INTERFACE)
-  set_property(TARGET settingsnode PROPERTY INTERFACE_COMPILE_DEFINITIONS "SETTINGSNODE_WITH_YAML")
-  set_property(TARGET settingsnode PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${SETTINGSNODE_MODULES_PATH}/include)
-  target_link_libraries(${TARGET} settingsnode)
-  include_yaml_cpp(${TARGET} ON "yaml-cpp-0.6.1")
-endfunction()
+  function(include_settingsnode TARGET)
+    set_property(TARGET settingsnode PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${SETTINGSNODE_MODULES_PATH}/include)
+    target_link_libraries(${TARGET} PRIVATE settingsnode)
+  endfunction()
+endif()
