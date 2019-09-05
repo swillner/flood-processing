@@ -43,8 +43,6 @@ if(PARALLELIZATION)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-include_netcdf_cxx4(flood_processing ON v4.3.0)
-
 option(WITH_GDAL "" OFF)
 if(WITH_GDAL)
   #include GDAL library
@@ -59,5 +57,7 @@ endif()
 
 include(lib/settingsnode/settingsnode.cmake)
 include_settingsnode(flood_processing)
+include_netcdf_cxx4(flood_processing ON v4.3.0)
+include_yaml_cpp(flood_processing ON "yaml-cpp-0.6.2")
 
 add_cpp_tools(flood_processing)

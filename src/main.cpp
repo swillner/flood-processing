@@ -19,6 +19,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include "grid_modules.h"
 #include "modules/downscaling.h"
@@ -30,6 +31,8 @@
 #include "nvector.h"
 #include "pipeline.h"
 #include "settingsnode.h"
+#include "settingsnode/inner.h"
+#include "settingsnode/yaml.h"
 #include "version.h"
 
 using T = float;
@@ -127,10 +130,10 @@ int main(int argc, char* argv[]) {
         } else {
             if (arg == "-") {
                 std::cin >> std::noskipws;
-                run(settings::SettingsNode(std::cin));
+                run(settings::SettingsNode(std::unique_ptr<settings::YAML>(new settings::YAML(std::cin))));
             } else {
                 std::ifstream settings_file(arg);
-                run(settings::SettingsNode(settings_file));
+                run(settings::SettingsNode(std::unique_ptr<settings::YAML>(new settings::YAML(settings_file))));
             }
             return 0;
         }
