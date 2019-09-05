@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2016-2017 Sven Willner <sven.willner@gmail.com>
+  Copyright (C) 2016-2018 Sven Willner <sven.willner@gmail.com>
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU Affero General Public License as published
@@ -18,14 +18,14 @@
 #ifndef SETTINGSNODE_H
 #define SETTINGSNODE_H
 
-#ifdef SETTINGSNODE_WITH_YAML
-#include <yaml-cpp/node/impl.h>
-#include <yaml-cpp/yaml.h>  // IWYU pragma: keep
-#else
-#error Only YAML supported yet. Must set SETTINGSNODE_WITH_YAML.
-#endif
+#include <algorithm>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include "settingsnode/inner.h"
 
 namespace settings {
 
@@ -38,127 +38,21 @@ class hstring {
   public:
     using base_type = std::string;
     using hash_type = uint64_t;
+
   protected:
     const base_type str_m;
     const hash_type hash_m;
-    hstring(const base_type& str_p, hash_type hash_p) : str_m(str_p), hash_m(hash_p){};
+    hstring(base_type str_p, hash_type hash_p) : str_m(std::move(str_p)), hash_m(hash_p){};
 
   public:
-    static constexpr hash_type hash(const char* str, hash_type prev = 5381) { return *str ? hash(str + 1, prev * 33 + *str) : prev; }
+    static constexpr hash_type hash(const char* str, hash_type prev = 5381) { return *str != '\0' ? hash(str + 1, prev * 33 + *str) : prev; }
     static hstring null() { return hstring("", 0); }
     explicit hstring(const base_type& str_p) : str_m(str_p), hash_m(hash(str_p.c_str())){};
-    operator hash_type() const { return hash_m; }
-    operator const base_type&() const { return str_m; }
-    hash_type operator^(hash_type other) const { return hash_m * 5381 * 5381 + other; }
-    friend std::ostream& operator<<(std::ostream& lhs, const hstring& rhs) {
-        return lhs << rhs.str_m;
-    }
+    constexpr operator hash_type() const { return hash_m; }        // NOLINT(google-explicit-constructor,hicpp-explicit-conversions)
+    constexpr operator const base_type&() const { return str_m; }  // NOLINT(google-explicit-constructor,hicpp-explicit-conversions)
+    constexpr hash_type operator^(hash_type other) const { return hash_m * 5381 * 5381 + other; }
+    friend std::ostream& operator<<(std::ostream& lhs, const hstring& rhs) { return lhs << rhs.str_m; }
 };
-
-class SettingsNode;
-
-class Inner {
-    friend class SettingsNode;
-    friend std::ostream& operator<<(std::ostream& os, const SettingsNode& node);
-
-  protected:
-    virtual bool as_bool() const = 0;
-    virtual int as_int() const = 0;
-    virtual unsigned int as_uint() const = 0;
-    virtual unsigned long as_ulint() const = 0;
-    virtual double as_double() const = 0;
-    virtual float as_float() const { return static_cast<float>(as_double()); }
-    virtual std::string as_string() const = 0;
-
-    virtual Inner* get(const char* key) const = 0;
-    virtual Inner* get(const std::string& key) const = 0;
-    virtual bool empty() const { return false; }
-    virtual bool has(const char* key) const = 0;
-    virtual bool has(const std::string& key) const = 0;
-    virtual bool is_map() const = 0;
-    virtual bool is_scalar() const = 0;
-    virtual bool is_sequence() const = 0;
-    virtual std::ostream& to_stream(std::ostream& os) const = 0;
-
-    class map_iterator {
-      public:
-        virtual void next() = 0;
-        virtual std::string name() const = 0;
-        virtual Inner* value() const = 0;
-        virtual bool equals(const map_iterator* rhs) const = 0;
-    };
-    virtual std::pair<map_iterator*, map_iterator*> as_map() const = 0;
-
-    class sequence_iterator {
-      public:
-        virtual void next() = 0;
-        virtual Inner* value() const = 0;
-        virtual bool equals(const sequence_iterator* rhs) const = 0;
-    };
-    virtual std::pair<sequence_iterator*, sequence_iterator*> as_sequence() const = 0;
-};
-
-#ifdef SETTINGSNODE_WITH_YAML
-class InnerYAML : public Inner {
-    friend class SettingsNode;
-
-  protected:
-    YAML::Node node;
-    explicit InnerYAML(const YAML::Node node_p) : node(node_p){};
-    inline bool as_bool() const override { return node.as<bool>(); }
-    inline int as_int() const override { return node.as<int>(); }
-    inline unsigned int as_uint() const override { return node.as<unsigned int>(); }
-    inline unsigned long as_ulint() const override { return node.as<unsigned long>(); }
-    inline double as_double() const override { return node.as<double>(); }
-    inline float as_float() const override { return node.as<float>(); }
-    inline std::string as_string() const override { return node.as<std::string>(); }
-
-    inline Inner* get(const char* key) const override { return new InnerYAML{node[key]}; }
-    inline Inner* get(const std::string& key) const override { return new InnerYAML{node[key]}; }
-    inline bool empty() const override { return !node; }
-    inline bool has(const char* key) const override { return node[key]; }
-    inline bool has(const std::string& key) const override { return node[key]; }
-    inline bool is_map() const override { return node.IsMap(); }
-    inline bool is_scalar() const override { return node.IsScalar(); }
-    inline bool is_sequence() const override { return node.IsSequence(); }
-    inline std::ostream& to_stream(std::ostream& os) const override { return os << node; }
-
-    class map_iterator : public Inner::map_iterator {
-        friend class InnerYAML;
-
-      protected:
-        YAML::Node::const_iterator it;
-        explicit map_iterator(const YAML::Node::const_iterator it_p) : it(it_p){};
-
-      public:
-        void next() override { ++it; }
-        std::string name() const override { return (*it).first.as<std::string>(); }
-        Inner* value() const override { return new InnerYAML((*it).second); }
-        bool equals(const Inner::map_iterator* rhs) const override { return it == static_cast<const map_iterator*>(rhs)->it; }
-    };
-
-    std::pair<Inner::map_iterator*, Inner::map_iterator*> as_map() const override {
-        return std::make_pair(new map_iterator(node.begin()), new map_iterator(node.end()));
-    }
-
-    class sequence_iterator : public Inner::sequence_iterator {
-        friend class InnerYAML;
-
-      protected:
-        YAML::Node::const_iterator it;
-        explicit sequence_iterator(const YAML::Node::const_iterator it_p) : it(it_p){};
-
-      public:
-        void next() override { ++it; }
-        Inner* value() const override { return new InnerYAML(*it); }
-        bool equals(const Inner::sequence_iterator* rhs) const override { return it == static_cast<const sequence_iterator*>(rhs)->it; }
-    };
-
-    std::pair<Inner::sequence_iterator*, Inner::sequence_iterator*> as_sequence() const override {
-        return std::make_pair(new sequence_iterator(node.begin()), new sequence_iterator(node.end()));
-    }
-};
-#endif
 
 class SettingsNode {
   protected:
@@ -169,11 +63,11 @@ class SettingsNode {
     };
     std::shared_ptr<Path> path;
     std::shared_ptr<Inner> inner;
-    SettingsNode(Inner* inner_p, const std::shared_ptr<Path>& path_p) : inner(inner_p), path(path_p){};
+    SettingsNode(Inner* inner_p, std::shared_ptr<Path> path_p) : inner(inner_p), path(std::move(path_p)){};
 
     template<class T, class S = void>
     struct enable_if_type {
-        typedef S type;
+        using type = S;
     };
     template<typename T, typename enable = void>
     struct basetype {
@@ -215,7 +109,7 @@ class SettingsNode {
         const std::shared_ptr<Path> path;
         std::unique_ptr<Inner::map_iterator> begin_m;
         std::unique_ptr<Inner::map_iterator> end_m;
-        Map(Inner::map_iterator* begin_p, Inner::map_iterator* end_p, const std::shared_ptr<Path>& path_p) : begin_m(begin_p), end_m(end_p), path(path_p){};
+        Map(Inner::map_iterator* begin_p, Inner::map_iterator* end_p, std::shared_ptr<Path> path_p) : begin_m(begin_p), end_m(end_p), path(std::move(path_p)){};
 
       public:
         class iterator {
@@ -235,8 +129,8 @@ class SettingsNode {
             bool operator==(const iterator& rhs) const { return it->equals(rhs.it); }
             bool operator!=(const iterator& rhs) const { return !it->equals(rhs.it); }
         };
-        iterator begin() const { return iterator(begin_m.get(), path); }
-        iterator end() const { return iterator(end_m.get(), path); }
+        iterator begin() const { return {begin_m.get(), path}; }
+        iterator end() const { return {end_m.get(), path}; }
     };
 
     class Sequence {
@@ -246,8 +140,8 @@ class SettingsNode {
         const std::shared_ptr<Path> path;
         std::unique_ptr<Inner::sequence_iterator> begin_m;
         std::unique_ptr<Inner::sequence_iterator> end_m;
-        Sequence(Inner::sequence_iterator* begin_p, Inner::sequence_iterator* end_p, const std::shared_ptr<Path>& path_p)
-            : begin_m(begin_p), end_m(end_p), path(path_p){};
+        Sequence(Inner::sequence_iterator* begin_p, Inner::sequence_iterator* end_p, std::shared_ptr<Path> path_p)
+            : begin_m(begin_p), end_m(end_p), path(std::move(path_p)){};
 
       public:
         class iterator {
@@ -268,18 +162,18 @@ class SettingsNode {
             bool operator==(const iterator& rhs) const { return it->equals(rhs.it); }
             bool operator!=(const iterator& rhs) const { return !it->equals(rhs.it); }
         };
-        iterator begin() const { return iterator(begin_m.get(), path); }
-        iterator end() const { return iterator(end_m.get(), path); }
+        iterator begin() const { return {begin_m.get(), path}; }
+        iterator end() const { return {end_m.get(), path}; }
     };
 
     std::string get_path() const {
-        std::string result = "";
+        std::string result;
         const std::shared_ptr<Path>* current = &path;
         while (*current) {
             if ((*current)->index >= 0) {
-                result = "[" + std::to_string((*current)->index) + "]" + result;
+                result.insert(0, "[" + std::to_string((*current)->index) + "]");
             } else {
-                result = "/" + (*current)->name + result;
+                result.insert(0, "/" + (*current)->name);
             }
             current = &(*current)->parent;
         }
@@ -292,6 +186,7 @@ class SettingsNode {
     inline bool is_map() const { return inner && inner->is_map(); }
     inline bool has(const char* key) const { return inner && inner->has(key); }
     inline bool has(const std::string& key) const { return inner && inner->has(key); }
+    inline void require() const { check(); }
 
     SettingsNode::Map as_map() const {
         check();
@@ -301,6 +196,14 @@ class SettingsNode {
         const auto& it = inner->as_map();
         return Map(it.first, it.second, path);
     }
+    template<typename T>
+    std::unordered_map<std::string, T> to_map() const {
+        const auto map = as_map();
+        std::unordered_map<std::string, T> res;
+        std::transform(std::begin(map), std::end(map), std::inserter(res, std::end(res)),
+                       [](const std::pair<std::string, SettingsNode> p) { return std::make_pair(p.first, p.second.as<T>()); });
+        return res;
+    }
     SettingsNode::Sequence as_sequence() const {
         check();
         if (!inner->is_sequence()) {
@@ -308,6 +211,13 @@ class SettingsNode {
         }
         const auto& it = inner->as_sequence();
         return Sequence(it.first, it.second, path);
+    }
+    template<typename T>
+    std::vector<T> to_vector() const {
+        const auto sequence = as_sequence();
+        std::vector<T> res;
+        std::transform(std::begin(sequence), std::end(sequence), std::back_inserter(res), [](const SettingsNode n) { return n.as<T>(); });
+        return res;
     }
 
     inline SettingsNode operator[](const char* key) const {
@@ -329,23 +239,10 @@ class SettingsNode {
         return T(as_inner<typename basetype<T>::type>(fallback));
     }
 
-    enum class Format {
-#ifdef SETTINGSNODE_WITH_YAML
-        YAML
-#endif
-    };
-
-    SettingsNode(){};
-#ifdef SETTINGSNODE_WITH_YAML
-    SettingsNode(std::istream& stream, const std::string& root = "", const Format format = Format::YAML)
-        : path(std::make_shared<Path>(Path{root, -1, nullptr})) {
-        switch (format) {
-            case Format::YAML:
-                inner.reset(new InnerYAML(YAML::Load(stream)));
-                break;
-        }
-    }
-#endif
+    SettingsNode() = default;
+    SettingsNode(SettingsNode&&) = default;
+    explicit SettingsNode(std::unique_ptr<Inner> inner_p, const std::string& root = "")
+        : path(std::make_shared<Path>(Path{root, -1, nullptr})), inner(std::move(inner_p)) {}
 
     SettingsNode& operator=(const SettingsNode& rhs) {
         if (rhs.empty()) {
@@ -364,6 +261,78 @@ class SettingsNode {
             inner = rhs.inner;
         }
         path = rhs.path;
+    }
+
+    void json(std::ostream& os, const std::string& indent = "", bool first = true) const {
+        if (first) {
+            os << indent;
+        }
+        if (is_sequence()) {
+            os << "[\n";
+            bool noindent = true;
+            for (const auto& i : as_sequence()) {
+                if (noindent) {
+                    noindent = false;
+                } else {
+                    os << ",\n";
+                }
+                os << indent << "  ";
+                i.json(os, indent + "  ", false);
+            }
+            os << "\n" << indent << "]";
+        } else if (is_map()) {
+            os << "{\n";
+            bool noindent = true;
+            for (const auto& i : as_map()) {
+                if (noindent) {
+                    noindent = false;
+                } else {
+                    os << ",\n";
+                }
+                os << indent << "  \"" << i.first << "\": ";
+                i.second.json(os, indent + "  ", false);
+            }
+            os << "\n" << indent << "}";
+        } else {
+            os << "\"" << as<std::string>() << "\"";
+        }
+        if (first) {
+            os << "\n";
+        }
+    }
+
+    void yaml(std::ostream& os, const std::string& indent = "", bool first = true) const {
+        if (first) {
+            os << indent;
+        }
+        if (is_sequence()) {
+            bool noindent = true;
+            for (const auto& i : as_sequence()) {
+                if (noindent) {
+                    noindent = false;
+                } else {
+                    os << "\n" << indent;
+                }
+                os << "- ";
+                i.yaml(os, indent + "  ", false);
+            }
+        } else if (is_map()) {
+            bool noindent = true;
+            for (const auto& i : as_map()) {
+                if (noindent) {
+                    noindent = false;
+                } else {
+                    os << "\n" << indent;
+                }
+                os << "\"" << i.first << "\": ";
+                i.second.yaml(os, indent + "  ", false);
+            }
+        } else {
+            os << "\"" << as<std::string>() << "\"";
+        }
+        if (first) {
+            os << "\n";
+        }
     }
 
     inline friend std::ostream& operator<<(std::ostream& os, const SettingsNode& node) { return node.inner->to_stream(os); }
@@ -419,5 +388,23 @@ inline std::string SettingsNode::as_inner<std::string>() const {
 }
 
 }  // namespace settings
+
+template<>
+struct std::iterator_traits<settings::SettingsNode::Map::iterator> {
+    using value_type = std::pair<std::string, settings::SettingsNode>;
+    using difference_type = void;
+    using pointer = void;
+    using reference = std::pair<std::string, settings::SettingsNode>;
+    using iterator_category = std::forward_iterator_tag;
+};
+
+template<>
+struct std::iterator_traits<settings::SettingsNode::Sequence::iterator> {
+    using value_type = settings::SettingsNode;
+    using difference_type = void;
+    using pointer = void;
+    using reference = settings::SettingsNode;
+    using iterator_category = std::forward_iterator_tag;
+};
 
 #endif
