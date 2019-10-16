@@ -30,6 +30,7 @@ add_executable(flood_processing src/main.cpp ${MODULE_SOURCES})
 target_include_directories(flood_processing PRIVATE include lib/lmoments/include lib/cpp-library lib/nvector)
 set_property(TARGET flood_processing PROPERTY CXX_STANDARD 14)
 
+add_system_paths()
 set_advanced_cpp_warnings(flood_processing)
 set_build_type_specifics(flood_processing)
 add_git_version(flood_processing
