@@ -31,10 +31,10 @@ target_include_directories(flood_processing PRIVATE include lib/lmoments/include
 set_property(TARGET flood_processing PROPERTY CXX_STANDARD 14)
 
 add_system_paths()
+set_advanced_options()
 set_advanced_cpp_warnings(flood_processing)
 set_build_type_specifics(flood_processing)
-add_git_version(flood_processing
-  FALLBACK_VERSION 1.0.0)
+add_git_version(flood_processing)
 
 option(PARALLELIZATION "" ON)
 if(PARALLELIZATION)
@@ -55,7 +55,7 @@ endif()
 
 option(WITH_GDAL "" OFF)
 if(WITH_GDAL)
-  #include GDAL library
+  # include GDAL library
   find_package(GDAL REQUIRED)
   message(STATUS "GDAL include directory: ${GDAL_INCLUDE_DIR}")
   message(STATUS "GDAL library: ${GDAL_LIBRARY}")
@@ -68,6 +68,6 @@ endif()
 include(lib/settingsnode/settingsnode.cmake)
 include_settingsnode(flood_processing)
 include_netcdf_cxx4(flood_processing ON v4.3.0)
-include_yaml_cpp(flood_processing ON "yaml-cpp-0.6.2")
+include_yaml_cpp(flood_processing ON "yaml-cpp-0.6.3")
 
 add_cpp_tools(flood_processing)
