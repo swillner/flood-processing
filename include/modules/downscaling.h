@@ -87,6 +87,11 @@ class Downscaling : public pipeline::Module {
     constexpr void fine_to_med_dx_dy(std::size_t area_size_x, T const* p_fine_flddph, float lat, float lon, int dx, int dy, Function&& func) const;
     template<typename Function>
     void fine_to_med(const Area& area, const nvector::Vector<T, 2>& fine_flddph, Function&& func);
+    void downscale_remapping(const Area& area,
+                             const nvector::Vector<T, 2>& fine_flddph,
+                             nvector::Vector<T, 2, cudatools::vector<T>>& flddph,
+                             nvector::Vector<T, 2, cudatools::vector<T>>& fldfrc,
+                             nvector::Vector<T, 2, cudatools::vector<T>>& fldnum);
 
   public:
     void coarse_to_fine_gpu(const Area& area, const nvector::View<T, 2, T*>& coarse_flddph, nvector::View<T, 2, T*>& result) const;

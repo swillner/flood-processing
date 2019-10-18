@@ -216,6 +216,27 @@ void Downscaling<T>::run(pipeline::Pipeline* p) {
 }
 
 template<typename T>
+void Downscaling<T>::downscale_remapping(const Area& area,
+                                         const nvector::Vector<T, 2>& fine_flddph,
+                                         nvector::Vector<T, 2, cudatools::vector<T>>& flddph,
+                                         nvector::Vector<T, 2, cudatools::vector<T>>& fldfrc,
+                                         nvector::Vector<T, 2, cudatools::vector<T>>& fldnum) {
+    fine_to_med(area, fine_flddph, [&](std::size_t med_lat, std::size_t med_lon, T cell_dph, T dcell_dph) {
+        if (med_lat >= inverse_target_cell_size * (90 - to_lat) && med_lat < inverse_target_cell_size * (90 - from_lat)
+            && med_lon >= inverse_target_cell_size * (180 + from_lon) && med_lon < inverse_target_cell_size * (180 + to_lon)) {
+            const auto target_lat = static_cast<int>(med_lat) - inverse_target_cell_size * (90 - to_lat);
+            const auto target_lon = static_cast<int>(med_lon) - inverse_target_cell_size * (180 + from_lon);
+            if (dcell_dph > 0) {
+                T& tmp = flddph(target_lat, target_lon);
+                tmp = std::max(tmp, cell_dph);
+                ++fldfrc(target_lat, target_lon);
+            }
+            ++fldnum(target_lat, target_lon);
+        }
+    });
+}
+
+template<typename T>
 void Downscaling<T>::downscale(const nvector::View<T, 3>& timed_flddph,
                                netCDF::File& result_flddph,
                                netCDF::NcVar result_flddph_var,
@@ -236,19 +257,7 @@ void Downscaling<T>::downscale(const nvector::View<T, 3>& timed_flddph,
             for (std::size_t area_i = 0; area_i < areas.size(); ++area_i) {
                 const auto& area = areas[area_i];
                 const auto fine_flddph = coarse_to_fine(area, coarse_flddph);
-                fine_to_med(area, fine_flddph, [&](std::size_t med_lat, std::size_t med_lon, T cell_dph, T dcell_dph) {
-                    if (med_lat >= inverse_target_cell_size * (90 - to_lat) && med_lat < inverse_target_cell_size * (90 - from_lat)
-                        && med_lon >= inverse_target_cell_size * (180 + from_lon) && med_lon < inverse_target_cell_size * (180 + to_lon)) {
-                        const auto target_lat = static_cast<int>(med_lat) - inverse_target_cell_size * (90 - to_lat);
-                        const auto target_lon = static_cast<int>(med_lon) - inverse_target_cell_size * (180 + from_lon);
-                        if (dcell_dph > 0) {
-                            T& tmp = flddph(target_lat, target_lon);
-                            tmp = std::max(tmp, cell_dph);
-                            ++fldfrc(target_lat, target_lon);
-                        }
-                        ++fldnum(target_lat, target_lon);
-                    }
-                });
+                downscale_remapping(area, fine_flddph, flddph, fldfrc, fldnum);
             }
         } else {
             for (auto& area : areas) {
