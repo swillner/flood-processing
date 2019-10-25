@@ -28,6 +28,7 @@
 #include <vector>
 #include "netcdftools.h"
 #include "nvector.h"
+#include "version.h"
 
 namespace netCDF {
 
@@ -155,6 +156,7 @@ class File : public netCDF::NcFile {
                 putAtt("created_with", "https://github.com/swillner/flood-processing by S. Willner");
                 putAtt("citation", "https://doi.org/10.5281/zenodo.1241051");
                 putAtt("contact", "sven.willner@pik-potsdam.de");
+                putAtt("flood_processing_version", FLOOD_PROCESSING_VERSION);
                 break;
             default:
                 throw std::runtime_error("unknown file mode");
