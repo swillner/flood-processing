@@ -325,13 +325,8 @@ void Downscaling<T>::downscale(const nvector::View<T, 3>& timed_flddph,
                 frc = nan;
             }
         });
-#pragma omp parallel sections default(shared)
-        {
-#pragma omp section
-            { result_flddph.set<T, 2>(result_flddph_var, flddph, index); }
-#pragma omp section
-            { result_fldfrc.set<T, 2>(result_fldfrc_var, fldfrc, index); }
-        }
+        result_flddph.set<T, 2>(result_flddph_var, flddph, index);
+        result_fldfrc.set<T, 2>(result_fldfrc_var, fldfrc, index);
         ++progress;
         return true;
     });
