@@ -18,6 +18,7 @@
 */
 
 #include "modules/downscaling.h"
+#include <cmath>
 #include <fstream>
 #include "cudatools.h"
 #include "netcdf/File.h"
@@ -175,6 +176,10 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
     if (to_lon > 180 || from_lon >= to_lon) {
         throw std::runtime_error("invalid to_lon");
     }
+    from_lat = -90 + std::floor((from_lat - -90) * inverse_target_cell_size) / inverse_target_cell_size;
+    from_lon = -180 + std::floor((from_lon - -180) * inverse_target_cell_size) / inverse_target_cell_size;
+    to_lat = 90 - std::floor((90 - to_lat) * inverse_target_cell_size) / inverse_target_cell_size;
+    to_lon = 180 - std::floor((180 - to_lon) * inverse_target_cell_size) / inverse_target_cell_size;
     target_lon_count = (to_lon - from_lon) * inverse_target_cell_size;
     target_lat_count = (to_lat - from_lat) * inverse_target_cell_size;
 }
