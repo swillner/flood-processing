@@ -18,6 +18,7 @@
 */
 
 #include "modules/sum_per_region.h"
+#include <algorithm>
 #include "nvector.h"
 
 namespace flood_processing {
@@ -38,28 +39,30 @@ void SumPerRegion<T>::run(pipeline::Pipeline* p) {
             throw std::runtime_error("grid sizes differ");
         }
         const auto time_count = data->template size<0>();
-        auto output = std::make_shared<nvector::Vector<T, 2>>(0, time_count, regions_count);
+        nvector::Vector<double, 2> res(0, time_count, regions_count);  // use double to avoid inaccuracies during summing up
         data->template split<false, true, true>().foreach_parallel([&](std::size_t index, nvector::View<T, 2>& grid) {
             nvector::foreach_view(nvector::collect(grid, region_index_raster), [&](std::size_t lat, std::size_t lon, T d, T region_index_l) {
                 (void)lat;
                 (void)lon;
                 if (d > 0 && region_index_l >= 0) {
-                    (*output)(index, region_index_l) += d;
+                    res(index, region_index_l) += d;
                 }
                 return true;
             });
         });
+        auto output = std::make_shared<nvector::Vector<T, 2>>(0, time_count, regions_count);
+        std::move(std::begin(res.data()), std::end(res.data()), std::begin(output->data()));
         p->provide<nvector::Vector<T, 2>>(outputname, output);
     } else {
         netCDF::File file(filename, 'r');
         netCDF::NcVar var = file.var(varname);
         const auto time_count = file.size<0>(var);
-        auto output = std::make_shared<nvector::Vector<T, 2>>(0, time_count, regions_count);
         const std::size_t lat_count = file.size<1>(var);
         const std::size_t lon_count = file.size<2>(var);
         if (lat_count != region_index_raster.template size<0>() || lon_count != region_index_raster.template size<1>()) {
             throw std::runtime_error("grid sizes differ");
         }
+        nvector::Vector<double, 2> res(0, time_count, regions_count);  // use double to avoid inaccuracies during summing up
         nvector::Vector<T, 2> grid(0, lat_count, lon_count);
         for (std::size_t index = 0; index < time_count; ++index) {
             var.getVar({index, 0, 0}, {1, lat_count, lon_count}, &grid.data()[0]);
@@ -67,11 +70,13 @@ void SumPerRegion<T>::run(pipeline::Pipeline* p) {
                 (void)lat;
                 (void)lon;
                 if (d > 0 && region_index_l >= 0) {
-                    (*output)(index, region_index_l) += d;
+                    res(index, region_index_l) += d;
                 }
                 return true;
             });
         }
+        auto output = std::make_shared<nvector::Vector<T, 2>>(0, time_count, regions_count);
+        std::move(std::begin(res.data()), std::end(res.data()), std::begin(output->data()));
         p->provide<nvector::Vector<T, 2>>(outputname, output);
     }
 }
