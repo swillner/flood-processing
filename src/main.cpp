@@ -81,7 +81,7 @@ static void run(const settings::SettingsNode& settings) {
             case settings::hstring::hash("sum_per_region"):
                 p.register_module(std::make_unique<flood_processing::modules::SumPerRegion<T>>(m));
                 break;
-            case settings::hstring::hash("per_region_writer2d"):
+            case settings::hstring::hash("per_region_writer"):
                 p.register_module(std::make_unique<flood_processing::modules::PerRegionWriter2d<T>>(m));
                 break;
             default:

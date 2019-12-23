@@ -50,18 +50,18 @@ class Downscaling : public pipeline::Module {
             std::size_t x;
             std::size_t y;
         } size;
-        nvector::Vector<std::int16_t, 2, cudatools::vector<std::int16_t, true>> gridx;
-        nvector::Vector<std::int16_t, 2, cudatools::vector<std::int16_t, true>> gridy;
-        nvector::Vector<float, 2, cudatools::vector<float, true>> flddif;
+        nvector::Vector<std::int16_t, 2, cudatools::vector<std::int16_t, true>> gridx = {};
+        nvector::Vector<std::int16_t, 2, cudatools::vector<std::int16_t, true>> gridy = {};
+        nvector::Vector<float, 2, cudatools::vector<float, true>> flddif = {};
     };
 
   protected:
     std::array<Area, 14> areas{
-        Area{"sa1", {-85, 15}, {11000, 15000}, {}, {}}, Area{"ca1", {-120, 40}, {12000, 7000}, {}, {}}, Area{"na1", {-130, 60}, {16000, 7000}, {}, {}},
-        Area{"af1", {5, 35}, {11000, 14000}, {}, {}},   Area{"eu1", {-20, 60}, {8000, 12000}, {}, {}},  Area{"eu2", {5, 60}, {13000, 8000}, {}, {}},
-        Area{"as1", {55, 60}, {9000, 11000}, {}, {}},   Area{"as2", {90, 60}, {12000, 8000}, {}, {}},   Area{"as3", {90, 35}, {13000, 10000}, {}, {}},
-        Area{"oc1", {110, -10}, {14000, 8000}, {}, {}}, Area{"na2", {-170, 75}, {23000, 5000}, {}, {}}, Area{"eu3", {0, 80}, {14000, 7000}, {}, {}},
-        Area{"si1", {55, 80}, {12000, 7000}, {}, {}},   Area{"si2", {100, 75}, {19000, 5000}, {}, {}},
+        Area{"sa1", {-85, 15}, {11000, 15000}}, Area{"ca1", {-120, 40}, {12000, 7000}}, Area{"na1", {-130, 60}, {16000, 7000}},
+        Area{"af1", {5, 35}, {11000, 14000}},   Area{"eu1", {-20, 60}, {8000, 12000}},  Area{"eu2", {5, 60}, {13000, 8000}},
+        Area{"as1", {55, 60}, {9000, 11000}},   Area{"as2", {90, 60}, {12000, 8000}},   Area{"as3", {90, 35}, {13000, 10000}},
+        Area{"oc1", {110, -10}, {14000, 8000}}, Area{"na2", {-170, 75}, {23000, 5000}}, Area{"eu3", {0, 80}, {14000, 7000}},
+        Area{"si1", {55, 80}, {12000, 7000}},   Area{"si2", {100, 75}, {19000, 5000}},
     };
     std::size_t target_lon_count;
     std::size_t target_lat_count;
