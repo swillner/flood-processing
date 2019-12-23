@@ -252,14 +252,14 @@ class File : public netCDF::NcFile {
         var.putVar(&data[0]);
     }
 
-    template<typename T, std::size_t dim, typename Storage>
-    void set(netCDF::NcVar var, const nvector::Vector<T, dim, Storage>& data) {
-        set_helper<T, 0, dim, Storage>::set(var, data);
-    }
+    // template<typename T, std::size_t dim, typename Storage>
+    // void set(netCDF::NcVar var, const nvector::Vector<T, dim, Storage>& data) { // TODO Really needed?
+    //     set_helper<T, 0, dim, Storage>::set(var, data); // TODO Fix issue with dimension missmatch
+    // }
 
     template<typename T, std::size_t dim, typename Storage, typename... Indices>
     void set(netCDF::NcVar var, const nvector::Vector<T, dim, Storage>& data, Indices&&... indices) {
-        var_set_helper<T, 0, dim, Storage>::set(var, data, std::forward<Indices>(indices)...);
+        var_set_helper<T, 0, dim, Storage>::set(var, data, std::forward<Indices>(indices)...);  // TODO Fix issue with dimension missmatch
     }
 
     template<typename T>

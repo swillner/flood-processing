@@ -94,7 +94,7 @@ class PerRegionWriter2d : public pipeline::Module {
             throw std::runtime_error("Sizes do not match: " + inputarrayname + " and regions");
         }
         netCDF::NcVar var = file.var<T>(varname, {file.dimvar(*dim1), regiondim});
-        file.set<T>(var, *data);
+        file.set<T>(var, data->data());
     }
     inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"per_region_writer", {inputarrayname, "regions", "time"}, {}}; }
 };

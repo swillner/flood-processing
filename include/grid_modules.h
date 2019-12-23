@@ -242,14 +242,14 @@ class GridWriterModule : public pipeline::Module {
                 throw std::runtime_error("Only 2d input grid supported");
             }
             auto var = file.var<T>(varname, {file.lat(grid->template size<1>()), file.lon(grid->template size<2>())});
-            file.set<T>(var, *grid);
+            file.set<T>(var, grid->data());
         } else {
             auto time = p->consume<netCDF::DimVar<double>>(inputtimename);
             if (grid->template size<0>() != time->size()) {
                 throw std::runtime_error("Sizes do not match: " + inputgridname + " and " + inputtimename);
             }
             auto var = file.var<T>(varname, {file.dimvar(*time), file.lat(grid->template size<1>()), file.lon(grid->template size<2>())});
-            file.set<T>(var, *grid);
+            file.set<T>(var, grid->data());
         }
     }
     inline pipeline::ModuleDescription describe() override {
@@ -281,7 +281,10 @@ class RegionRasterGridWriterModule : public GridWriterModule<T> {
             throw std::runtime_error("Only 2d input grid supported");
         }
         netCDF::File file(filename, 'w');
-        file.set<T>(file.var<T>(varname, {file.lat(data->template size<1>()), file.lon(data->template size<2>())}), *data);
+
+        auto var = file.var<T>(varname, {file.lat(data->template size<1>()), file.lon(data->template size<2>())});
+        file.set<T>(var, data->data());
+
         std::vector<const char*> regions_char(regions->size());
         std::transform(std::begin(*regions), std::end(*regions), std::begin(regions_char), [](const std::string& r) { return r.c_str(); });
         file.set<const char*>(file.var<const char*>(regionvarname, {file.addDim(regionvarname, regions->size())}), regions_char);
