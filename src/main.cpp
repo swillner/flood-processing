@@ -45,6 +45,9 @@ static void run(const settings::SettingsNode& settings) {
             case settings::hstring::hash("array_reader"):
                 p.register_module(std::make_unique<pipeline::ArrayReaderModule>(m));
                 break;
+            case settings::hstring::hash("csv_reader"):
+                p.register_module(std::make_unique<pipeline::CSVReaderModule>(m));
+                break;
             case settings::hstring::hash("grid_reader"):
                 p.register_module(std::make_unique<pipeline::GridReaderModule<T>>(m));
                 break;

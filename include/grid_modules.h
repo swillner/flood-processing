@@ -23,6 +23,7 @@
 #include <limits>
 #include <stdexcept>
 #include <vector>
+#include "csv-parser.h"
 #include "netcdf/File.h"
 #include "nvector.h"
 #include "pipeline.h"
@@ -67,6 +68,54 @@ class ArrayReaderModule : public pipeline::Module {
         }
     }
     inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"array_reader", {}, {outputname}}; }
+};
+
+class CSVReaderModule : public pipeline::Module {
+  protected:
+    std::string filename;
+    std::string outputname;
+    std::string type_name;
+    int skiprows;
+    int col;
+
+    template<typename T>
+    void read_data(csv::Parser& parser, pipeline::Pipeline* p) {
+        auto result = std::make_shared<std::vector<T>>();
+        for (int i = 0; i < skiprows; ++i) {
+            parser.next_row();
+        }
+        do {
+            for (int i = 0; i < col; ++i) {
+                parser.next_col();
+            }
+            result->push_back(parser.read<T>());
+        } while (parser.next_row());
+        p->provide<std::vector<T>>(outputname, result);
+    }
+
+  public:
+    explicit CSVReaderModule(const settings::SettingsNode& settings) {
+        filename = settings["filename"].as<std::string>();
+        outputname = settings["output"].as<std::string>();
+        type_name = settings["type"].as<std::string>();
+        skiprows = settings["skiprows"].as<std::size_t>(0);
+        col = settings["col"].as<std::size_t>(0);
+    }
+    void run(pipeline::Pipeline* p) override {
+        std::ifstream infile(filename);
+        if (!infile.good()) {
+            throw std::runtime_error(filename + " not found");
+        }
+        csv::Parser parser(infile);
+        if (type_name == "string") {
+            read_data<std::string>(parser, p);
+        } else if (type_name == "double") {
+            read_data<double>(parser, p);
+        } else {
+            throw std::runtime_error("Unknown type '" + type_name + "'");
+        }
+    }
+    inline pipeline::ModuleDescription describe() override { return pipeline::ModuleDescription{"csv_reader", {}, {outputname}}; }
 };
 
 template<typename T>
