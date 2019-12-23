@@ -47,8 +47,8 @@ template<typename T>
 Rasterization<T>::Rasterization(const settings::SettingsNode& settings) {
     resolution_mask_name = settings["resolution_from"].as<std::string>("");
     if (resolution_mask_name.empty()) {
-        xres = settings["xres"].as<std::size_t>();
-        yres = settings["yres"].as<std::size_t>();
+        lat_count = settings["lat_count"].as<std::size_t>();
+        lon_count = settings["lon_count"].as<std::size_t>();
     }
     shapefilename = settings["shapefile"].as<std::string>();
     if (settings.has("layer")) {
@@ -260,12 +260,12 @@ void Rasterization<T>::run(pipeline::Pipeline* p) {
 #ifdef FLOOD_PROCESSING_WITH_GDAL
     if (!resolution_mask_name.empty()) {
         const auto resolution_mask = p->consume<nvector::View<T, 2>>(resolution_mask_name);
-        xres = resolution_mask->template size<0>();
-        yres = resolution_mask->template size<1>();
+        lat_count = resolution_mask->template size<0>();
+        lon_count = resolution_mask->template size<1>();
     }
-    auto raster = std::make_shared<nvector::Vector<T, 2>>(std::numeric_limits<T>::quiet_NaN(), xres, yres);
+    auto raster = std::make_shared<nvector::Vector<T, 2>>(std::numeric_limits<T>::quiet_NaN(), lat_count, lon_count);
     if (adjust_scale > 1) {
-        nvector::Vector<T, 2> fine_raster(std::numeric_limits<T>::quiet_NaN(), adjust_scale * xres, adjust_scale * yres);
+        nvector::Vector<T, 2> fine_raster(std::numeric_limits<T>::quiet_NaN(), adjust_scale * lat_count, adjust_scale * lon_count);
         rasterize(fine_raster, [&](OGRFeature* feature, std::size_t index) {
             (void)index;
             return feature->GetFieldAsDouble(fieldname.c_str());
@@ -314,14 +314,13 @@ void RegionIndexRasterization<T>::run(pipeline::Pipeline* p) {
     const auto regions = p->consume<std::vector<std::string>>("regions");
     if (!resolution_mask_name.empty()) {
         const auto resolution_mask = p->consume<nvector::View<T, 2>>(resolution_mask_name);
-        xres = resolution_mask->template size<0>();
-        yres = resolution_mask->template size<1>();
+        lat_count = resolution_mask->template size<0>();
+        lon_count = resolution_mask->template size<1>();
     }
-    auto raster_raw = std::make_shared<nvector::Vector<T, 3>>(std::numeric_limits<T>::quiet_NaN(), 1, xres, yres);
+    auto raster_raw = std::make_shared<nvector::Vector<T, 3>>(std::numeric_limits<T>::quiet_NaN(), 1, lat_count, lon_count);
     auto raster = raster_raw->template split<nvector::Split<false, true, true>>().at(0);
     std::vector<bool> region_found(regions->size(), false);
-    rasterize(raster, [&](OGRFeature* feature, std::size_t index) {
-        (void)index;
+    rasterize(raster, [&](OGRFeature* feature, std::size_t /* index */) -> double {
         std::string id;
         for (const auto& fieldname_l : this->fieldnames) {
             auto field_index = feature->GetFieldIndex(fieldname_l.c_str());

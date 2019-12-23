@@ -41,8 +41,8 @@ class Rasterization : public pipeline::Module {
     std::size_t adjust_scale;
     T invalid_value;
     bool adjust_max;
-    std::size_t xres;
-    std::size_t yres;
+    std::size_t lat_count;
+    std::size_t lon_count;
     void advance(nvector::View<T, 2>& result, std::size_t max_advance);
     template<typename Function>
     void rasterize(nvector::View<T, 2>& result, Function&& func);
@@ -70,8 +70,8 @@ class RegionIndexRasterization : public Rasterization<T> {
     using Rasterization<T>::advance;
     using Rasterization<T>::combine_fine;
     using Rasterization<T>::invalid_value;
-    using Rasterization<T>::xres;
-    using Rasterization<T>::yres;
+    using Rasterization<T>::lat_count;
+    using Rasterization<T>::lon_count;
     std::vector<std::string> fieldnames;
     std::unordered_map<std::string, std::string> correction_map;
     std::unordered_map<std::string, std::string> iso3_to_iso2;
