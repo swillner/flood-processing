@@ -224,11 +224,15 @@ inline void Rasterization<T>::rasterize(nvector::View<T, 2>& result, Function&& 
             if (!std::isnan(value)) {
                 OGRGeometry* geometry = infeature->GetGeometryRef();                               //->SimplifyPreserveTopology(pixel_size / 16);
                 gv_rasterize_one_shape(static_cast<unsigned char*>(static_cast<void*>(&data[0])),  // unsigned char *pabyChunkBuf,
+                                       0,                                                          // int nXOff,
                                        0,                                                          // int nYOff,
                                        lon_count,                                                  // int nXSize,
                                        lat_count,                                                  // int nYSize,
                                        1,                                                          // int nBands,
                                        GDT_Float64,                                                // GDALDataType eType,
+                                       0,                                                          // int nPixelSpace,
+                                       0,                                                          // GSpacing nLineSpace,
+                                       0,                                                          // GSpacing nBandSpace,
                                        0,                                                          // int bAllTouched,
                                        geometry,                                                   // OGRGeometry *poShape,
                                        &value,                                                     // double *padfBurnValue,
@@ -341,8 +345,9 @@ void RegionIndexRasterization<T>::run(pipeline::Pipeline* p) {
         if (r == regions->end()) {
             return std::numeric_limits<double>::quiet_NaN();
         }
-        region_found[r - regions->begin()] = true;
-        return static_cast<double>(std::distance(regions->begin(), r));
+        const int index = r - regions->begin();
+        region_found[index] = true;
+        return static_cast<double>(index);
     });
     bool found = false;
     for (std::size_t i = 0; i < regions->size(); ++i) {
