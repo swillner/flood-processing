@@ -71,7 +71,8 @@ void Downscaling<T>::coarse_to_fine_gpu(const Area& area, const nvector::View<T,
 
 template<typename T>
 template<typename Function>
-constexpr void Downscaling<T>::fine_to_med_dx_dy(std::size_t area_size_x, T const* p_fine_flddph, double lat, double lon, int dx, int dy, Function&& func) const {
+constexpr void Downscaling<T>::fine_to_med_dx_dy(
+    std::size_t area_size_x, T const* p_fine_flddph, double lat, double lon, int dx, int dy, Function&& func) const {
     const int offset = dy * area_size_x + dx;
     const T dlon = fine_cell_size * dx;
     const T dlat = -fine_cell_size * dy;
@@ -176,12 +177,17 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
     if (to_lon > 180 || from_lon >= to_lon) {
         throw std::runtime_error("invalid to_lon");
     }
+
+    // calculate these before adjusting lat/lon boundaries to avoid rounding issues
+    target_lon_count =
+        360 * inverse_target_cell_size - std::floor((180 - to_lon) * inverse_target_cell_size) - std::floor((from_lon - -180) * inverse_target_cell_size);
+    target_lat_count =
+        180 * inverse_target_cell_size - std::floor((90 - to_lat) * inverse_target_cell_size) - std::floor((from_lat - -90) * inverse_target_cell_size);
+
     from_lat = -90 + std::floor((from_lat - -90) * inverse_target_cell_size) / inverse_target_cell_size;
     from_lon = -180 + std::floor((from_lon - -180) * inverse_target_cell_size) / inverse_target_cell_size;
     to_lat = 90 - std::floor((90 - to_lat) * inverse_target_cell_size) / inverse_target_cell_size;
     to_lon = 180 - std::floor((180 - to_lon) * inverse_target_cell_size) / inverse_target_cell_size;
-    target_lon_count = std::ceil((to_lon - from_lon) * inverse_target_cell_size);
-    target_lat_count = std::ceil((to_lat - from_lat) * inverse_target_cell_size);
 }
 
 template<typename T>
