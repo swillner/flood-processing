@@ -43,8 +43,8 @@ class Downscaling : public pipeline::Module {
     struct Area {
         const char* name = "\0";
         struct {
-            float lon;
-            float lat;
+            double lon;
+            double lat;
         } origin;
         struct {
             std::size_t x;
@@ -68,7 +68,7 @@ class Downscaling : public pipeline::Module {
     const std::size_t coarse_lon_count = 1440;
     const std::size_t coarse_lat_count = 720;
     const std::size_t fine_inverse_cell_size = 200;
-    const float fine_cell_size = 1. / static_cast<float>(fine_inverse_cell_size);
+    const double fine_cell_size = 1. / static_cast<double>(fine_inverse_cell_size);
     const std::size_t fine_lon_count = 360 * fine_inverse_cell_size;
     const std::size_t fine_lat_count = 180 * fine_inverse_cell_size;
     std::string map_path;
@@ -79,12 +79,12 @@ class Downscaling : public pipeline::Module {
     std::size_t inverse_target_cell_size;
     std::string projection_times_name;
     std::string return_levels_name;
-    float from_lat, to_lat;
-    float from_lon, to_lon;
+    double from_lat, to_lat;
+    double from_lon, to_lon;
 
     nvector::Vector<T, 2> coarse_to_fine(const Area& area, const nvector::View<T, 2>& coarse_flddph) const;
     template<typename Function>
-    constexpr void fine_to_med_dx_dy(std::size_t area_size_x, T const* p_fine_flddph, float lat, float lon, int dx, int dy, Function&& func) const;
+    constexpr void fine_to_med_dx_dy(std::size_t area_size_x, T const* p_fine_flddph, double lat, double lon, int dx, int dy, Function&& func) const;
     template<typename Function>
     void fine_to_med(const Area& area, const nvector::Vector<T, 2>& fine_flddph, Function&& func);
     void downscale_remapping(const Area& area,

@@ -71,7 +71,7 @@ void Downscaling<T>::coarse_to_fine_gpu(const Area& area, const nvector::View<T,
 
 template<typename T>
 template<typename Function>
-constexpr void Downscaling<T>::fine_to_med_dx_dy(std::size_t area_size_x, T const* p_fine_flddph, float lat, float lon, int dx, int dy, Function&& func) const {
+constexpr void Downscaling<T>::fine_to_med_dx_dy(std::size_t area_size_x, T const* p_fine_flddph, double lat, double lon, int dx, int dy, Function&& func) const {
     const int offset = dy * area_size_x + dx;
     const T dlon = fine_cell_size * dx;
     const T dlat = -fine_cell_size * dy;
@@ -89,8 +89,8 @@ void Downscaling<T>::fine_to_med(const Area& area, const nvector::Vector<T, 2>& 
     for (std::size_t y = 0; y < area.size.y; ++y) {
         for (std::size_t x = 0; x < area.size.x; ++x) {
             if (!std::isnan(*p_fine_flddph)) {
-                const float lon = area.origin.lon + fine_cell_size * (x + 0.5);
-                const float lat = area.origin.lat - fine_cell_size * (y + 0.5);
+                const double lon = area.origin.lon + fine_cell_size * (x + 0.5);
+                const double lat = area.origin.lat - fine_cell_size * (y + 0.5);
                 if (inverse_target_cell_size < 200) {
                     if (x > 0) {
                         if (y > 0) {
@@ -160,10 +160,10 @@ Downscaling<T>::Downscaling(const settings::SettingsNode& settings) {
         }
     }
 
-    from_lat = settings["from_lat"].as<float>(-90);
-    to_lat = settings["to_lat"].as<float>(90);
-    from_lon = settings["from_lon"].as<float>(-180);
-    to_lon = settings["to_lon"].as<float>(180);
+    from_lat = settings["from_lat"].as<double>(-90);
+    to_lat = settings["to_lat"].as<double>(90);
+    from_lon = settings["from_lon"].as<double>(-180);
+    to_lon = settings["to_lon"].as<double>(180);
     if (from_lat < -90) {
         throw std::runtime_error("invalid from_lat");
     }
@@ -283,16 +283,12 @@ void Downscaling<T>::downscale(const nvector::View<T, 3>& timed_flddph,
                 nvector::foreach_aligned_gpu(nvector::collect(flddph, fldfrc, fldnum), [=] CUDA_DEVICE(std::size_t i, T & dph, T & frc, T & num) {
                     const auto lat_index = i / target_lon_count_l;
                     const auto lon_index = i % target_lon_count_l;
-                    if (lat_index < inverse_target_cell_size_l * (90 - to_lat_l) && lat_index >= inverse_target_cell_size_l * (90 - from_lat_l)
-                        && lon_index < inverse_target_cell_size_l * (180 + from_lon_l) && lon_index >= inverse_target_cell_size_l * (180 + to_lon_l)) {
+                    const auto lat = to_lat_l - static_cast<double>(lat_index) / static_cast<double>(inverse_target_cell_size_l);
+                    if (lat > origin_lat || lat < from_lat_l) {
                         return;
                     }
-                    const auto lat = 90. - static_cast<float>(lat_index) / static_cast<float>(inverse_target_cell_size_l);
-                    if (lat > origin_lat) {
-                        return;
-                    }
-                    const auto lon = static_cast<float>(lon_index) / static_cast<float>(inverse_target_cell_size_l) - 180.;
-                    if (lon < origin_lon) {
+                    const auto lon = from_lon_l + static_cast<double>(lon_index) / static_cast<double>(inverse_target_cell_size_l);
+                    if (lon < origin_lon || lon > to_lon_l) {
                         return;
                     }
                     const auto start_y = static_cast<std::size_t>((origin_lat - lat) * fine_inverse_cell_size_l);
