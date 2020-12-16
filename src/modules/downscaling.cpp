@@ -207,18 +207,30 @@ void Downscaling<T>::run(pipeline::Pipeline* p) {
             area.flddif.data().read(flddif);
         }
     }
+    std::vector<std::size_t> chunks = {1, target_lat_count, target_lon_count};
     auto coarse_flddph = p->consume<nvector::View<T, 3>>(return_levels_name);
     const auto projection_times = p->consume<netCDF::DimVar<double>>(projection_times_name);
+
     netCDF::File flddph_file(flddph_filename, 'w');
-    netCDF::File fldfrc_file(fldfrc_filename, 'w');
     netCDF::NcVar flddph_var = flddph_file.var<T>(flddph_varname, {flddph_file.dimvar(*projection_times), flddph_file.lat(target_lat_count, from_lat, to_lat),
                                                                    flddph_file.lon(target_lon_count, from_lon, to_lon)});
-    std::vector<std::size_t> chunks = {1, target_lat_count, target_lon_count};
+    flddph_var.putAtt("grid_mapping", "crs");
+    flddph_var.putAtt("units", "m");
+    flddph_var.putAtt("long_name", "flood depth");
     flddph_var.setChunking(netCDF::NcVar::nc_CHUNKED, chunks);
+    nc_del_att(flddph_file.getId(), flddph_file.var("time").getId(), "bounds");
+
+    netCDF::File fldfrc_file(fldfrc_filename, 'w');
     netCDF::NcVar fldfrc_var = fldfrc_file.var<T>(fldfrc_varname, {fldfrc_file.dimvar(*projection_times), fldfrc_file.lat(target_lat_count, from_lat, to_lat),
                                                                    fldfrc_file.lon(target_lon_count, from_lon, to_lon)});
+    fldfrc_var.putAtt("grid_mapping", "crs");
+    fldfrc_var.putAtt("units", "1");
+    fldfrc_var.putAtt("long_name", "flood fraction");
     fldfrc_var.setChunking(netCDF::NcVar::nc_CHUNKED, chunks);
+    nc_del_att(fldfrc_file.getId(), fldfrc_file.var("time").getId(), "bounds");
+
     downscale(*coarse_flddph, flddph_file, flddph_var, fldfrc_file, fldfrc_var);
+
     for (auto& area : areas) {
         area.gridx.resize(0, 0, 0);
         area.gridy.resize(0, 0, 0);

@@ -157,6 +157,14 @@ class File : public netCDF::NcFile {
                 putAtt("citation", "https://doi.org/10.5281/zenodo.1241051");
                 putAtt("contact", "sven.willner@pik-potsdam.de");
                 putAtt("flood_processing_version", FLOOD_PROCESSING_VERSION);
+                putAtt("Conventions", "CF-1.7");
+                {
+                    auto crs = var<int>("crs", {});
+                    crs.putAtt(
+                        "crs_wkt",
+                        R"(GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]])");
+                    crs.putAtt("grid_mapping_name", "latitude_longitude");
+                }
                 break;
             default:
                 throw std::runtime_error("unknown file mode");

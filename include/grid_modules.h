@@ -249,6 +249,7 @@ class GridWriterModule : public pipeline::Module {
                 throw std::runtime_error("Sizes do not match: " + inputgridname + " and " + inputtimename);
             }
             auto var = file.var<T>(varname, {file.dimvar(*time), file.lat(grid->template size<1>()), file.lon(grid->template size<2>())});
+            var.putAtt("grid_mapping", "crs");
             file.set<T>(var, grid->data());
         }
     }
