@@ -267,33 +267,30 @@ void Rasterization<T>::run(pipeline::Pipeline* p) {
         lat_count = resolution_mask->template size<0>();
         lon_count = resolution_mask->template size<1>();
     }
-    auto raster = std::make_shared<nvector::Vector<T, 2>>(std::numeric_limits<T>::quiet_NaN(), lat_count, lon_count);
+    auto raster_raw = std::make_shared<nvector::Vector<T, 3>>(std::numeric_limits<T>::quiet_NaN(), 1, lat_count, lon_count);
+    auto raster = raster_raw->template split<nvector::Split<false, true, true>>().at(0);
     if (adjust_scale > 1) {
         nvector::Vector<T, 2> fine_raster(std::numeric_limits<T>::quiet_NaN(), adjust_scale * lat_count, adjust_scale * lon_count);
-        rasterize(fine_raster, [&](OGRFeature* feature, std::size_t index) {
-            (void)index;
+        rasterize(fine_raster, [&](OGRFeature* feature, std::size_t /* index */) {
             return feature->GetFieldAsDouble(fieldname.c_str());
         });
-        combine_fine(fine_raster, *raster);
+        combine_fine(fine_raster, raster);
     } else {
-        rasterize(*raster, [&](OGRFeature* feature, std::size_t index) {
-            (void)index;
+        rasterize(raster, [&](OGRFeature* feature, std::size_t /* index */) {
             return feature->GetFieldAsDouble(fieldname.c_str());
         });
     }
     if (max_advance > 0) {
-        advance(*raster, max_advance);
+        advance(raster, max_advance);
     }
     if (!std::isnan(invalid_value)) {
-        raster->foreach_parallel([&](std::size_t lat, std::size_t lon, T& n) {
-            (void)lat;
-            (void)lon;
+        raster.foreach_parallel([&](std::size_t /* lat */, std::size_t /* lon */, T& n) {
             if (n == invalid_value) {
                 n = std::numeric_limits<T>::quiet_NaN();
             }
         });
     }
-    p->provide<nvector::Vector<T, 2>>("raster", raster);
+    p->provide<nvector::Vector<T, 3>>("raster", raster_raw);
 #else
     (void)p;
 #endif

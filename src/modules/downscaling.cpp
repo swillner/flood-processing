@@ -253,8 +253,8 @@ void Downscaling<T>::downscale(const nvector::View<T, 3>& timed_flddph,
                                netCDF::NcVar result_flddph_var,
                                netCDF::File& result_fldfrc,
                                netCDF::NcVar result_fldfrc_var) {
-    nvector::Vector<T, 3, cudatools::vector<T, true>> coarse_flddph_gpu(0, timed_flddph.slices());
-    coarse_flddph_gpu.data().set(&timed_flddph[0]);
+    // nvector::Vector<T, 3, cudatools::vector<T, true>> coarse_flddph_gpu(0, timed_flddph.slices());
+    // coarse_flddph_gpu.data().set(&timed_flddph[0]);
     progressbar::ProgressBar progress(timed_flddph.template size<0>(), "Downscaling");
     nvector::Vector<T, 2, cudatools::vector<T>> flddph(0, target_lat_count, target_lon_count);
     nvector::Vector<T, 2, cudatools::vector<T>> fldfrc(0, target_lat_count, target_lon_count);
@@ -272,8 +272,10 @@ void Downscaling<T>::downscale(const nvector::View<T, 3>& timed_flddph,
             }
         } else {
             for (auto& area : areas) {
-                nvector::Vector<T, 2, cudatools::vector<T, true>> fine_flddph(std::numeric_limits<T>::quiet_NaN(), area.size.y, area.size.x);
-                coarse_to_fine_gpu(area, coarse_flddph_gpu.template split<nvector::Split<false, true, true>>()[index], fine_flddph);
+                // nvector::Vector<T, 2, cudatools::vector<T, true>> fine_flddph(std::numeric_limits<T>::quiet_NaN(), area.size.y, area.size.x);
+                // coarse_to_fine_gpu(area, coarse_flddph_gpu.template split<nvector::Split<false, true, true>>()[index], fine_flddph);
+                // coarse_to_fine_gpu(area, coarse_flddph, fine_flddph);
+                const auto fine_flddph = coarse_to_fine(area, coarse_flddph);
                 T* fine_flddph_ptr = &fine_flddph[0];
                 const auto size_x = area.size.x;
                 const auto size_y = area.size.y;
