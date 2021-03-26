@@ -207,7 +207,13 @@ void Downscaling<T>::run(pipeline::Pipeline* p) {
             area.flddif.data().read(flddif);
         }
     }
-    std::vector<std::size_t> chunks = {1, target_lat_count, target_lon_count};
+    auto chunk_lat_count = target_lat_count;
+    auto chunk_lon_count = target_lon_count;
+    while (chunk_lat_count * chunk_lon_count >= 1000000000) {
+        chunk_lat_count /= 2;
+        chunk_lon_count /= 2;
+    }
+    std::vector<std::size_t> chunks = {1, chunk_lat_count, chunk_lon_count};
     auto coarse_flddph = p->consume<nvector::View<T, 3>>(return_levels_name);
     const auto projection_times = p->consume<netCDF::DimVar<double>>(projection_times_name);
 
@@ -249,6 +255,9 @@ void Downscaling<T>::downscale_remapping(const Area& area,
             && med_lon >= inverse_target_cell_size * (180 + from_lon) && med_lon < inverse_target_cell_size * (180 + to_lon)) {
             const auto target_lat = static_cast<int>(med_lat) - inverse_target_cell_size * (90 - to_lat);
             const auto target_lon = static_cast<int>(med_lon) - inverse_target_cell_size * (180 + from_lon);
+            if (target_lat >= flddph.template size<0>() || target_lon >= flddph.template size<1>()) {
+                return;
+            }
             if (dcell_dph > 0) {
                 T& tmp = flddph(target_lat, target_lon);
                 tmp = std::max(tmp, cell_dph);
